@@ -39,7 +39,7 @@ A campus-focused app that helps Purdue students discover, compare, rate, and rev
 ## Supabase
 
 - The database schema lives in [`supabase/schema.sql`](supabase/schema.sql). Run it once in the team's shared Supabase project (Dashboard > SQL Editor); after that, teammates do **not** need to run it again.
-- **Schema changes are a team contract.** If your user story needs a new column/table/policy, post the SQL in the team chat, get a thumbs-up, have one person run it in the SQL Editor, and update `supabase/schema.sql` in the same PR as your feature.
+-
 - The app talks to Supabase through the shared client in [`src/lib/supabase.ts`](src/lib/supabase.ts):
 
   ```ts
@@ -62,7 +62,4 @@ src/lib/         supabase client and other shared modules
 supabase/        database schema (source of truth for the data model)
 ```
 
-## Workflow
 
-- Branch per user story (e.g. `story-9-filters`), PR into `main`, at least one teammate reviews.
-- Sprint 1 runs Sept 28 - Oct 16; see the Sprint 1 Planning Document for story ownership and the schedule.
