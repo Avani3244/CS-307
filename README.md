@@ -14,3 +14,5 @@ A campus-focused app that helps Purdue students discover, compare, rate, and rev
 - **`.env.example`** - copy to `.env` and fill in the two values pinned in the team chat. Never commit `.env`.
 
 The Expo app scaffold will be added separately.
+
+test
