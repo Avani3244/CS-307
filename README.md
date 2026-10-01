@@ -13,4 +13,4 @@ A campus-focused app that helps Purdue students discover, compare, rate, and rev
 - **`lib/supabase.ts`** - the shared Supabase client the app will import (with usage examples for auth, queries, and photo uploads in the comments). Move it into the app's folder structure once the Expo project is added.
 - **`.env.example`** - copy to `.env` and fill in the two values pinned in the team chat. Never commit `.env`.
 
-The Expo app scaffold will be added separately.
+The Expo app scaffold is set up with Expo Router, and the shared Supabase client is located at src/lib/supabase.ts.
