@@ -17,22 +17,22 @@ function RootLayoutNav() {
   useEffect(() => {
     if (isLoading) return;
 
-    // Check if the current screen is inside the (auth) folder
+    // 1. Hide native splash once auth state is resolved
+    SplashScreen.hideAsync().catch(() => {});
+
+    // 2. Auth routing gatekeeper
     const inAuthGroup = segments[0] === '(auth)';
 
     if (!session && !inAuthGroup) {
-      // User is logged out -> redirect to Login screen
       router.replace('/(auth)/login');
     } else if (session && inAuthGroup) {
-      // User is logged in -> redirect to main tabs
-      router.replace('/(tabs)');
-    }
+        router.replace('/(tabs)/profile');    }
   }, [session, isLoading, segments]);
 
   if (isLoading) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-        <ActivityIndicator size="large" color="#208AEF" />
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#121212' }}>
+        <ActivityIndicator size="large" color="#CEB888" />
       </View>
     );
   }
