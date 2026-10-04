@@ -1,4 +1,6 @@
+import { Colors } from '@/constants/theme';
 import { useLocalSearchParams } from 'expo-router';
+
 import { useState } from 'react';
 import {
   Pressable,
@@ -6,6 +8,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  useColorScheme,
   View,
 } from 'react-native';
 
@@ -24,32 +27,51 @@ function RatingSelector({
   value: number | null;
   onChange: (rating: number) => void;
 }) {
+  const colorScheme = useColorScheme();
+  const colors = Colors[colorScheme === 'dark' ? 'dark' : 'light'];
+
   return (
     <View style={styles.ratingRow}>
-      {[1, 2, 3, 4, 5].map((rating) => (
-        <Pressable
-          key={rating}
-          onPress={() => onChange(rating)}
-          style={[
-            styles.ratingButton,
-            value === rating && styles.selectedRatingButton,
-          ]}
-        >
-          <Text
+      {[1, 2, 3, 4, 5].map((rating) => {
+        const isSelected = value === rating;
+
+        return (
+          <Pressable
+            key={rating}
+            onPress={() => onChange(rating)}
             style={[
-              styles.ratingButtonText,
-              value === rating && styles.selectedRatingText,
+              styles.ratingButton,
+              {
+                borderColor: isSelected
+                  ? colors.text
+                  : colors.textSecondary,
+                backgroundColor: isSelected
+                  ? colors.backgroundElement
+                  : colors.background,
+              },
+              isSelected && styles.selectedRatingButton,
             ]}
           >
-            {rating}
-          </Text>
-        </Pressable>
-      ))}
+            <Text
+              style={[
+                styles.ratingButtonText,
+                { color: colors.text },
+                isSelected && styles.selectedRatingText,
+              ]}
+            >
+              {rating}
+            </Text>
+          </Pressable>
+        );
+      })}
     </View>
   );
 }
 
 export default function ReviewScreen() {
+  const colorScheme = useColorScheme();
+  const colors = Colors[colorScheme === 'dark' ? 'dark' : 'light'];
+  
   const params = useLocalSearchParams<{ locationId?: string }>();
   const locationId = params.locationId ?? 'Unknown location';
 
@@ -67,16 +89,23 @@ export default function ReviewScreen() {
   };
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.title}>Write a Review</Text>
+    <ScrollView
+      style={{ backgroundColor: colors.background }}
+      contentContainerStyle={styles.container}
+    >
+      <Text style={[styles.title, { color: colors.text }]}>
+        Write a Review
+      </Text>
 
-      <Text style={styles.locationText}>
+      <Text style={[styles.locationText, { color: colors.textSecondary }]}>
         Location ID: {locationId}
       </Text>
 
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Overall Rating *</Text>
-        <Text style={styles.helperText}>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>
+          Overall Rating *
+        </Text>
+        <Text style={[styles.helperText, { color: colors.textSecondary }]}>
           How would you rate this study location overall?
         </Text>
 
@@ -87,14 +116,15 @@ export default function ReviewScreen() {
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>
           Study-Specific Ratings
         </Text>
 
         {studyCategories.map((category) => (
           <View key={category} style={styles.categoryContainer}>
-            <Text style={styles.categoryLabel}>{category}</Text>
-
+            <Text style={[styles.categoryLabel, { color: colors.text }]}>
+              {category}
+            </Text>
             <RatingSelector
               value={categoryRatings[category] ?? null}
               onChange={(rating) =>
@@ -106,36 +136,68 @@ export default function ReviewScreen() {
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Your Review</Text>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>
+          Your Review
+        </Text>
 
         <TextInput
           value={reviewText}
           onChangeText={setReviewText}
           placeholder="What was it like studying here?"
+          placeholderTextColor={colors.textSecondary}
           multiline
           maxLength={1000}
-          style={styles.reviewInput}
+          style={[
+            styles.reviewInput,
+            {
+              color: colors.text,
+              borderColor: colors.textSecondary,
+              backgroundColor: colors.backgroundElement,
+            },
+          ]}
         />
 
-        <Text style={styles.characterCount}>
+        <Text style={[styles.characterCount, { color: colors.textSecondary }]}>
           {reviewText.length}/1000
         </Text>
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Photo</Text>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>
+          Photo
+        </Text>
 
-        <Text style={styles.helperText}>
+        <Text style={[styles.helperText, { color: colors.textSecondary }]}>
           Add an optional photo of this study location.
         </Text>
 
-        <Pressable style={styles.photoButton}>
-          <Text style={styles.photoButtonText}>Choose Photo</Text>
+        <Pressable
+          style={[
+            styles.photoButton,
+            {
+              borderColor: colors.textSecondary,
+              backgroundColor: colors.backgroundElement,
+            },
+          ]}
+        >
+          <Text style={[styles.photoButtonText, { color: colors.text }]}>
+            Choose Photo
+          </Text>
         </Pressable>
       </View>
 
-      <Pressable style={styles.submitButton}>
-        <Text style={styles.submitButtonText}>Submit Review</Text>
+      <Pressable
+        style={[
+          styles.submitButton,
+          {
+            borderColor: colors.text,
+            backgroundColor: colors.backgroundElement,
+          },
+        ]}
+      >
+        <Text style={[styles.submitButtonText, { color: colors.text }]}>
+          Submit Review
+        </Text>
       </Pressable>
     </ScrollView>
   );
