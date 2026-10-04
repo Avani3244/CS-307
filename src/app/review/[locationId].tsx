@@ -1,9 +1,11 @@
 import { Colors } from '@/constants/theme';
+import { supabase } from '@/lib/supabase';
 import * as ImagePicker from 'expo-image-picker';
 import { useLocalSearchParams } from 'expo-router';
 
 import { useState } from 'react';
 import {
+  Alert,
   Image,
   Pressable,
   ScrollView,
@@ -73,7 +75,7 @@ function RatingSelector({
 export default function ReviewScreen() {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme === 'dark' ? 'dark' : 'light'];
-  
+
   const params = useLocalSearchParams<{ locationId?: string }>();
   const locationId = params.locationId ?? 'Unknown location';
 
@@ -82,6 +84,7 @@ export default function ReviewScreen() {
     Record<string, number>
   >({});
   const [reviewText, setReviewText] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedPhoto, setSelectedPhoto] =
     useState<ImagePicker.ImagePickerAsset | null>(null);
 
@@ -109,6 +112,104 @@ export default function ReviewScreen() {
 
     if (!result.canceled) {
       setSelectedPhoto(result.assets[0]);
+    }
+  };
+
+  const submitReview = async () => {
+    if (!overallRating) {
+      Alert.alert(
+        'Missing overall rating',
+        'Please select an overall rating before submitting.'
+      );
+      return;
+    }
+
+    const requiredCategories = [
+      'Quietness',
+      'Wi-Fi',
+      'Outlets',
+      'Seating',
+      'Food Access',
+    ];
+
+    const missingCategory = requiredCategories.find(
+      (category) => !categoryRatings[category]
+    );
+
+    if (missingCategory) {
+      Alert.alert(
+        'Missing rating',
+        `Please rate ${missingCategory} before submitting.`
+      );
+      return;
+    }
+
+    if (!locationId || locationId === 'Unknown location') {
+      Alert.alert(
+        'Invalid location',
+        'This review must be opened from a valid study location.'
+      );
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
+
+      if (userError || !user) {
+        Alert.alert(
+          'Sign in required',
+          'You must be signed in before submitting a review.'
+        );
+        return;
+      }
+
+      const { data: review, error: reviewError } = await supabase
+        .from('reviews')
+        .insert({
+          user_id: user.id,
+          location_id: locationId,
+          overall_rating: overallRating,
+          category_ratings: {
+            quietness: categoryRatings['Quietness'],
+            wifi: categoryRatings['Wi-Fi'],
+            outlets: categoryRatings['Outlets'],
+            seating: categoryRatings['Seating'],
+            food: categoryRatings['Food Access'],
+          },
+          review_text: reviewText.trim() || null,
+        })
+        .select('id')
+        .single();
+
+      if (reviewError) {
+        throw reviewError;
+      }
+
+      Alert.alert(
+        'Review submitted',
+        'Your review was submitted successfully.'
+      );
+
+      console.log('Created review:', review.id);
+
+      setOverallRating(null);
+      setCategoryRatings({});
+      setReviewText('');
+      setSelectedPhoto(null);
+    } catch (error) {
+      console.error('Review submission failed:', error);
+
+      Alert.alert(
+        'Could not submit review',
+        'Something went wrong while saving your review. Please try again.'
+      );
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -209,33 +310,36 @@ export default function ReviewScreen() {
             Choose Photo
           </Text>
         </Pressable>
-              {selectedPhoto && (
-        <View style={styles.photoPreviewContainer}>
-          <Image
-            source={{ uri: selectedPhoto.uri }}
-            style={styles.photoPreview}
-          />
+        {selectedPhoto && (
+          <View style={styles.photoPreviewContainer}>
+            <Image
+              source={{ uri: selectedPhoto.uri }}
+              style={styles.photoPreview}
+            />
 
-          <Pressable onPress={() => setSelectedPhoto(null)}>
-            <Text style={{ color: colors.textSecondary }}>
-              Remove Photo
-            </Text>
-          </Pressable>
-        </View>
-      )}
+            <Pressable onPress={() => setSelectedPhoto(null)}>
+              <Text style={{ color: colors.textSecondary }}>
+                Remove Photo
+              </Text>
+            </Pressable>
+          </View>
+        )}
       </View>
 
       <Pressable
+        onPress={submitReview}
+        disabled={isSubmitting}
         style={[
           styles.submitButton,
           {
             borderColor: colors.text,
             backgroundColor: colors.backgroundElement,
+            opacity: isSubmitting ? 0.6 : 1,
           },
         ]}
       >
         <Text style={[styles.submitButtonText, { color: colors.text }]}>
-          Submit Review
+          {isSubmitting ? 'Submitting...' : 'Submit Review'}
         </Text>
       </Pressable>
     </ScrollView>
