@@ -1,5 +1,6 @@
 import { Colors } from '@/constants/theme';
 import { supabase } from '@/lib/supabase';
+import { decode } from 'base64-arraybuffer';
 import * as ImagePicker from 'expo-image-picker';
 import { useLocalSearchParams } from 'expo-router';
 
@@ -108,11 +109,40 @@ export default function ReviewScreen() {
       mediaTypes: ['images'],
       allowsEditing: true,
       quality: 0.8,
+      base64: true,
     });
 
     if (!result.canceled) {
       setSelectedPhoto(result.assets[0]);
     }
+  };
+
+  const uploadReviewPhoto = async (userId: string) => {
+    if (!selectedPhoto) {
+      return null;
+    }
+
+    if (!selectedPhoto.base64) {
+      throw new Error('Selected photo is missing image data.');
+    }
+
+    const fileExtension =
+      selectedPhoto.fileName?.split('.').pop()?.toLowerCase() ?? 'jpg';
+
+    const storagePath = `${userId}/${Date.now()}.${fileExtension}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from('review-photos')
+      .upload(storagePath, decode(selectedPhoto.base64), {
+        contentType: selectedPhoto.mimeType ?? 'image/jpeg',
+        upsert: false,
+      });
+
+    if (uploadError) {
+      throw uploadError;
+    }
+
+    return storagePath;
   };
 
   const submitReview = async () => {
@@ -152,6 +182,9 @@ export default function ReviewScreen() {
       return;
     }
 
+    let uploadedPhotoPath: string | null = null;
+    let createdReviewId: string | null = null;
+
     try {
       setIsSubmitting(true);
 
@@ -166,6 +199,10 @@ export default function ReviewScreen() {
           'You must be signed in before submitting a review.'
         );
         return;
+      }
+
+      if (selectedPhoto) {
+        uploadedPhotoPath = await uploadReviewPhoto(user.id);
       }
 
       const { data: review, error: reviewError } = await supabase
@@ -190,6 +227,21 @@ export default function ReviewScreen() {
         throw reviewError;
       }
 
+      createdReviewId = review.id;
+
+      if (uploadedPhotoPath) {
+        const { error: photoRecordError } = await supabase
+          .from('review_photos')
+          .insert({
+            review_id: review.id,
+            storage_path: uploadedPhotoPath,
+          });
+
+        if (photoRecordError) {
+          throw photoRecordError;
+        }
+      }
+
       Alert.alert(
         'Review submitted',
         'Your review was submitted successfully.'
@@ -203,6 +255,16 @@ export default function ReviewScreen() {
       setSelectedPhoto(null);
     } catch (error) {
       console.error('Review submission failed:', error);
+
+      if (createdReviewId) {
+        await supabase.from('reviews').delete().eq('id', createdReviewId);
+      }
+
+      if (uploadedPhotoPath) {
+        await supabase.storage
+          .from('review-photos')
+          .remove([uploadedPhotoPath]);
+      }
 
       Alert.alert(
         'Could not submit review',
