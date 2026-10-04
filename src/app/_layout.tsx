@@ -4,12 +4,13 @@ import { useEffect } from 'react';
 import { ActivityIndicator, useColorScheme, View } from 'react-native';
 
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
+import '@/lib/auth-links'; // start listening for email deep links immediately
 import { AuthProvider, useAuth } from '@/context/AuthContext';
 
 SplashScreen.preventAutoHideAsync();
 
 function RootLayoutNav() {
-  const { session, isLoading } = useAuth();
+  const { session, isLoading, isRecovering } = useAuth();
   const segments = useSegments();
   const router = useRouter();
   const colorScheme = useColorScheme();
@@ -25,9 +26,10 @@ function RootLayoutNav() {
 
     if (!session && !inAuthGroup) {
       router.replace('/(auth)/login');
-    } else if (session && inAuthGroup) {
-        router.replace('/(tabs)/profile');    }
-  }, [session, isLoading, segments]);
+    } else if (session && inAuthGroup && !isRecovering) {
+      router.replace('/(tabs)/profile');
+    }
+  }, [session, isLoading, isRecovering, segments]);
 
   if (isLoading) {
     return (
