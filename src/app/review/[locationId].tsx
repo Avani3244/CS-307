@@ -1,8 +1,10 @@
 import { Colors } from '@/constants/theme';
+import * as ImagePicker from 'expo-image-picker';
 import { useLocalSearchParams } from 'expo-router';
 
 import { useState } from 'react';
 import {
+  Image,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -80,12 +82,34 @@ export default function ReviewScreen() {
     Record<string, number>
   >({});
   const [reviewText, setReviewText] = useState('');
+  const [selectedPhoto, setSelectedPhoto] =
+    useState<ImagePicker.ImagePickerAsset | null>(null);
 
   const updateCategoryRating = (category: string, rating: number) => {
     setCategoryRatings((currentRatings) => ({
       ...currentRatings,
       [category]: rating,
     }));
+  };
+
+  const pickPhoto = async () => {
+    const permissionResult =
+      await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+    if (!permissionResult.granted) {
+      alert('Photo library permission is required to choose a photo.');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      quality: 0.8,
+    });
+
+    if (!result.canceled) {
+      setSelectedPhoto(result.assets[0]);
+    }
   };
 
   return (
@@ -172,6 +196,7 @@ export default function ReviewScreen() {
         </Text>
 
         <Pressable
+          onPress={pickPhoto}
           style={[
             styles.photoButton,
             {
@@ -184,6 +209,20 @@ export default function ReviewScreen() {
             Choose Photo
           </Text>
         </Pressable>
+              {selectedPhoto && (
+        <View style={styles.photoPreviewContainer}>
+          <Image
+            source={{ uri: selectedPhoto.uri }}
+            style={styles.photoPreview}
+          />
+
+          <Pressable onPress={() => setSelectedPhoto(null)}>
+            <Text style={{ color: colors.textSecondary }}>
+              Remove Photo
+            </Text>
+          </Pressable>
+        </View>
+      )}
       </View>
 
       <Pressable
@@ -307,5 +346,16 @@ const styles = StyleSheet.create({
   submitButtonText: {
     fontSize: 17,
     fontWeight: '700',
+  },
+
+  photoPreviewContainer: {
+    gap: 10,
+    alignItems: 'center',
+  },
+
+  photoPreview: {
+    width: '100%',
+    height: 220,
+    borderRadius: 12,
   },
 });
