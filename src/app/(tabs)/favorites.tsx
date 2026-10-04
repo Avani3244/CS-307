@@ -7,32 +7,57 @@ import { listFavoriteLocations } from '@/lib/favorites';
 import type { StudyLocation } from '@/lib/locations';
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { ActivityIndicator, FlatList, StyleSheet, Text, View } from 'react-native';
+import {
+  ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, View,
+} from 'react-native';
 
 export default function FavoritesScreen() {
   const { user } = useAuth();
   const [favorites, setFavorites] = useState<StudyLocation[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    if (!user) return;
+    try {
+      setError(null);
+      setFavorites(await listFavoriteLocations(user.id));
+    } catch {
+      setError("Couldn't load your favorites. Check your connection and try again.");
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [user]);
 
   // Reload whenever the tab gains focus, so hearts toggled on Discover show here.
   useFocusEffect(
     useCallback(() => {
-      let active = true;
-      (async () => {
-        if (!user) return;
-        try {
-          const data = await listFavoriteLocations(user.id);
-          if (active) setFavorites(data);
-        } finally {
-          if (active) setLoading(false);
-        }
-      })();
-      return () => { active = false; };
-    }, [user]),
+      load();
+    }, [load]),
   );
 
   if (loading) {
     return <ActivityIndicator style={{ marginTop: 48 }} size="large" color="#208AEF" />;
+  }
+
+  if (error) {
+    return (
+      <View style={[styles.container, styles.center]}>
+        <Text style={styles.emptyTitle}>Something went wrong</Text>
+        <Text style={styles.emptyBody}>{error}</Text>
+        <Pressable
+          accessibilityRole="button"
+          style={styles.retryButton}
+          onPress={() => {
+            setLoading(true);
+            load();
+          }}>
+          <Text style={styles.retryLabel}>Try again</Text>
+        </Pressable>
+      </View>
+    );
   }
 
   return (
@@ -41,6 +66,15 @@ export default function FavoritesScreen() {
         data={favorites}
         keyExtractor={(item) => item.id}
         contentContainerStyle={favorites.length === 0 && styles.emptyWrap}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => {
+              setRefreshing(true);
+              load();
+            }}
+          />
+        }
         renderItem={({ item }) => (
           <View style={styles.card}>
             <View style={{ flex: 1 }}>
@@ -71,6 +105,7 @@ export default function FavoritesScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#fff', paddingTop: 14 },
+  center: { alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 },
   card: { flexDirection: 'row', alignItems: 'center', marginHorizontal: 14, marginBottom: 10, padding: 14, borderRadius: 12, backgroundColor: '#F0F0F3' },
   cardName: { fontSize: 16, fontWeight: '700' },
   cardMeta: { marginTop: 2, fontSize: 13, color: '#60646C' },
@@ -78,4 +113,6 @@ const styles = StyleSheet.create({
   empty: { alignItems: 'center', paddingHorizontal: 32 },
   emptyTitle: { fontSize: 16, fontWeight: '700' },
   emptyBody: { marginTop: 6, fontSize: 14, color: '#60646C', textAlign: 'center' },
+  retryButton: { marginTop: 14, paddingHorizontal: 22, paddingVertical: 10, borderRadius: 10, backgroundColor: '#208AEF' },
+  retryLabel: { color: '#fff', fontWeight: '700' },
 });
