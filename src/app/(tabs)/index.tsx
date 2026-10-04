@@ -1,10 +1,11 @@
 // src/app/(tabs)/index.tsx - Discover
-// Host screen for Neha's stories #9 (filter/sort), #7 (nearby), #12 (favorites).
+// Host screen for Neha's stories #9 (filter/sort), #7 (nearby), #12 (favorites), #17 (crowd reports).
 // NOTE for Sri: story #6 (browse list + open/closed status) owns the real
 // location card. This list intentionally renders a minimal card; extend or
 // replace renderCard with your design - the data and filter plumbing
 // around it should not need to change.
 
+import CrowdReportSheet from '@/components/CrowdReportSheet';
 import FavoriteButton from '@/components/FavoriteButton';
 import FilterSheet from '@/components/FilterSheet';
 import { useAuth } from '@/context/AuthContext';
@@ -28,6 +29,7 @@ export default function DiscoverScreen() {
   const [nearbyOn, setNearbyOn] = useState(false);
   const [nearbyMessage, setNearbyMessage] = useState('');
   const [filterSheetOpen, setFilterSheetOpen] = useState(false);
+  const [reporting, setReporting] = useState<DiscoverLocation | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -75,6 +77,12 @@ export default function DiscoverScreen() {
           {item.category ?? 'Study spot'}
           {item.distanceKm != null ? `  \u00B7  ${item.distanceKm.toFixed(1)} km away` : ''}
         </Text>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Report current conditions at ${item.name}`}
+          onPress={() => setReporting(item)}>
+          <Text style={styles.reportLink}>Report conditions</Text>
+        </Pressable>
       </View>
       <FavoriteButton
         locationId={item.id}
@@ -140,6 +148,11 @@ export default function DiscoverScreen() {
         onChangeSort={setSort}
         onClose={() => setFilterSheetOpen(false)}
       />
+      <CrowdReportSheet
+        locationId={reporting?.id ?? null}
+        locationName={reporting?.name}
+        onClose={() => setReporting(null)}
+      />
     </View>
   );
 }
@@ -156,6 +169,7 @@ const styles = StyleSheet.create({
   card: { flexDirection: 'row', alignItems: 'center', marginHorizontal: 14, marginBottom: 10, padding: 14, borderRadius: 12, backgroundColor: '#F0F0F3' },
   cardName: { fontSize: 16, fontWeight: '700' },
   cardMeta: { marginTop: 2, fontSize: 13, color: '#60646C' },
+  reportLink: { marginTop: 8, color: '#208AEF', fontWeight: '600', fontSize: 13, minHeight: 24 },
   emptyWrap: { flexGrow: 1, justifyContent: 'center' },
   empty: { alignItems: 'center', paddingHorizontal: 32 },
   emptyTitle: { fontSize: 16, fontWeight: '700', textAlign: 'center' },
