@@ -1,5 +1,5 @@
 // src/app/(tabs)/index.tsx - Discover
-// Host screen for Neha's story #9 (filter/sort).
+// Host screen for Neha's stories #9 (filter/sort) and #7 (nearby).
 // NOTE for Sri: story #6 (browse list + open/closed status) owns the real
 // location card. This list intentionally renders a minimal card; extend or
 // replace renderCard with your design - the data and filter plumbing
@@ -7,17 +7,21 @@
 
 import FilterSheet from '@/components/FilterSheet';
 import {
-  fetchLocations, type Filters, type SortOption, type StudyLocation,
+  fetchLocations, type Coords, type DiscoverLocation, type Filters, type SortOption,
 } from '@/lib/locations';
+import * as Location from 'expo-location';
 import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, View,
 } from 'react-native';
 
 export default function DiscoverScreen() {
-  const [locations, setLocations] = useState<StudyLocation[]>([]);
+  const [locations, setLocations] = useState<DiscoverLocation[]>([]);
   const [filters, setFilters] = useState<Filters>({});
   const [sort, setSort] = useState<SortOption>('name');
+  const [coords, setCoords] = useState<Coords | null>(null);
+  const [nearbyOn, setNearbyOn] = useState(false);
+  const [nearbyMessage, setNearbyMessage] = useState('');
   const [filterSheetOpen, setFilterSheetOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -25,23 +29,46 @@ export default function DiscoverScreen() {
   const load = useCallback(async () => {
     setError('');
     try {
-      setLocations(await fetchLocations({ filters, sort }));
+      setLocations(await fetchLocations({ filters, sort, coords: nearbyOn ? coords : null }));
     } catch {
       setError('Could not load study locations. Pull to retry.');
     } finally {
       setLoading(false);
     }
-  }, [filters, sort]);
+  }, [filters, sort, nearbyOn, coords]);
 
   useEffect(() => { load(); }, [load]);
 
+  // Story #7: nearby toggle with permission handling and denied fallback
+  const toggleNearby = async () => {
+    if (nearbyOn) {
+      setNearbyOn(false);
+      setNearbyMessage('');
+      if (sort === 'distance') setSort('name');
+      return;
+    }
+    const { status } = await Location.requestForegroundPermissionsAsync();
+    if (status !== 'granted') {
+      setNearbyMessage('Location permission denied, so nearby results are unavailable. Showing the default list.');
+      return;
+    }
+    const position = await Location.getCurrentPositionAsync({});
+    setCoords({ latitude: position.coords.latitude, longitude: position.coords.longitude });
+    setNearbyOn(true);
+    setNearbyMessage('');
+    setSort('distance');
+  };
+
   const activeFilterCount = Object.keys(filters).length;
 
-  const renderCard = ({ item }: { item: StudyLocation }) => (
+  const renderCard = ({ item }: { item: DiscoverLocation }) => (
     <View style={styles.card}>
       <View style={{ flex: 1 }}>
         <Text style={styles.cardName}>{item.name}</Text>
-        <Text style={styles.cardMeta}>{item.category ?? 'Study spot'}</Text>
+        <Text style={styles.cardMeta}>
+          {item.category ?? 'Study spot'}
+          {item.distanceKm != null ? `  \u00B7  ${item.distanceKm.toFixed(1)} km away` : ''}
+        </Text>
       </View>
     </View>
   );
@@ -49,6 +76,15 @@ export default function DiscoverScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.controls}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityState={{ selected: nearbyOn }}
+          style={[styles.controlButton, nearbyOn && styles.controlButtonOn]}
+          onPress={toggleNearby}>
+          <Text style={[styles.controlText, nearbyOn && styles.controlTextOn]}>
+            {nearbyOn ? 'Nearby: on' : 'Nearby'}
+          </Text>
+        </Pressable>
         <Pressable
           accessibilityRole="button"
           style={[styles.controlButton, activeFilterCount > 0 && styles.controlButtonOn]}
@@ -59,6 +95,7 @@ export default function DiscoverScreen() {
         </Pressable>
       </View>
 
+      {!!nearbyMessage && <Text style={styles.notice}>{nearbyMessage}</Text>}
       {!!error && <Text style={styles.noticeError}>{error}</Text>}
 
       {loading ? (
@@ -88,6 +125,7 @@ export default function DiscoverScreen() {
         visible={filterSheetOpen}
         filters={filters}
         sort={sort}
+        nearbyOn={nearbyOn}
         onChangeFilters={setFilters}
         onChangeSort={setSort}
         onClose={() => setFilterSheetOpen(false)}
@@ -103,6 +141,7 @@ const styles = StyleSheet.create({
   controlButtonOn: { backgroundColor: '#208AEF' },
   controlText: { fontSize: 14, fontWeight: '600', color: '#000' },
   controlTextOn: { color: '#fff' },
+  notice: { marginHorizontal: 14, marginBottom: 6, color: '#60646C' },
   noticeError: { marginHorizontal: 14, marginBottom: 6, color: '#C62828' },
   card: { flexDirection: 'row', alignItems: 'center', marginHorizontal: 14, marginBottom: 10, padding: 14, borderRadius: 12, backgroundColor: '#F0F0F3' },
   cardName: { fontSize: 16, fontWeight: '700' },
