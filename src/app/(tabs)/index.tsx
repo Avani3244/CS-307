@@ -59,6 +59,22 @@ export default function DiscoverScreen() {
     setSort('distance');
   };
 
+  const refreshLocations = async () => {
+    if (nearbyOn) {
+      try {
+        const position = await Location.getCurrentPositionAsync({});
+        setCoords({
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+        });
+      } catch {
+        setError('Could not refresh your current location.');
+      }
+    } else {
+      await load();
+    }
+  };
+
   const activeFilterCount = Object.keys(filters).length;
 
   const renderCard = ({ item }: { item: DiscoverLocation }) => (
@@ -105,7 +121,9 @@ export default function DiscoverScreen() {
           data={locations}
           keyExtractor={(item) => item.id}
           renderItem={renderCard}
-          refreshControl={<RefreshControl refreshing={false} onRefresh={load} />}
+          refreshControl={
+            <RefreshControl refreshing={false} onRefresh={refreshLocations} />
+          }
           contentContainerStyle={locations.length === 0 && styles.emptyWrap}
           ListEmptyComponent={
             <View style={styles.empty}>
