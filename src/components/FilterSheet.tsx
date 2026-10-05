@@ -1,5 +1,5 @@
 // src/components/FilterSheet.tsx
-// Story #9: filter and sort controls. Owner: Neha
+// Stories #9 (filter/sort) and #7 (distance sort when Nearby is on). Owner: Neha
 // Bottom-sheet modal with one chip row per study criterion; multiple
 // filters combine (AND), one tap clears all (per acceptance criteria).
 
@@ -15,19 +15,21 @@ import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-nati
 const SORT_OPTIONS: { value: SortOption; label: string }[] = [
   { value: 'name', label: 'Name' },
   { value: 'category', label: 'Category' },
+  { value: 'distance', label: 'Distance' },
 ];
 
 interface Props {
   visible: boolean;
   filters: Filters;
   sort: SortOption;
+  nearbyOn: boolean;
   onChangeFilters: (f: Filters) => void;
   onChangeSort: (s: SortOption) => void;
   onClose: () => void;
 }
 
 export default function FilterSheet({
-  visible, filters, sort, onChangeFilters, onChangeSort, onClose,
+  visible, filters, sort, nearbyOn, onChangeFilters, onChangeSort, onClose,
 }: Props) {
   const toggle = (key: AmenityKey, value: string) => {
     const next = { ...filters };
@@ -85,12 +87,14 @@ export default function FilterSheet({
               <View style={styles.chipRow}>
                 {SORT_OPTIONS.map((option) => {
                   const selected = sort === option.value;
+                  const disabled = option.value === 'distance' && !nearbyOn;
                   return (
                     <Pressable
                       key={option.value}
                       accessibilityRole="button"
-                      accessibilityState={{ selected }}
-                      style={[styles.chip, selected && styles.chipSelected]}
+                      accessibilityState={{ selected, disabled }}
+                      disabled={disabled}
+                      style={[styles.chip, selected && styles.chipSelected, disabled && styles.chipDisabled]}
                       onPress={() => onChangeSort(option.value)}>
                       <Text style={[styles.chipText, selected && styles.chipTextSelected]}>
                         {option.label}
@@ -99,6 +103,9 @@ export default function FilterSheet({
                   );
                 })}
               </View>
+              {!nearbyOn && (
+                <Text style={styles.hint}>Turn on Nearby to sort by distance.</Text>
+              )}
             </View>
           </ScrollView>
 
@@ -123,8 +130,10 @@ const styles = StyleSheet.create({
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 16, borderRadius: 22, backgroundColor: '#F0F0F3' },
   chipSelected: { backgroundColor: '#208AEF' },
+  chipDisabled: { opacity: 0.4 },
   chipText: { fontSize: 14, color: '#000' },
   chipTextSelected: { color: '#fff', fontWeight: '600' },
+  hint: { marginTop: 6, fontSize: 12, color: '#60646C' },
   done: { marginTop: 18, minHeight: 48, borderRadius: 12, backgroundColor: '#208AEF', alignItems: 'center', justifyContent: 'center' },
   doneText: { color: '#fff', fontSize: 16, fontWeight: '700' },
 });
