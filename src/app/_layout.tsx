@@ -1,11 +1,18 @@
-import { DarkTheme, DefaultTheme, Stack, ThemeProvider, useRouter, useSegments } from 'expo-router';
+import {
+  DarkTheme,
+  DefaultTheme,
+  Stack,
+  ThemeProvider,
+  useRouter,
+  useSegments,
+} from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
 import { ActivityIndicator, useColorScheme, View } from 'react-native';
 
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
-import '@/lib/auth-links'; // start listening for email deep links immediately
 import { AuthProvider, useAuth } from '@/context/AuthContext';
+import '@/lib/auth-links'; // start listening for email deep links immediately
 
 SplashScreen.preventAutoHideAsync();
 
@@ -18,10 +25,8 @@ function RootLayoutNav() {
   useEffect(() => {
     if (isLoading) return;
 
-    // 1. Hide native splash once auth state is resolved
-    SplashScreen.hideAsync().catch(() => {});
+    SplashScreen.hideAsync().catch(() => { });
 
-    // 2. Auth routing gatekeeper
     const inAuthGroup = segments[0] === '(auth)';
 
     if (!session && !inAuthGroup) {
@@ -29,11 +34,18 @@ function RootLayoutNav() {
     } else if (session && inAuthGroup && !isRecovering) {
       router.replace('/(tabs)/profile');
     }
-  }, [session, isLoading, isRecovering, segments]);
+  }, [session, isLoading, isRecovering, segments, router]);
 
   if (isLoading) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#121212' }}>
+      <View
+        style={{
+          flex: 1,
+          justifyContent: 'center',
+          alignItems: 'center',
+          backgroundColor: '#121212',
+        }}
+      >
         <ActivityIndicator size="large" color="#CEB888" />
       </View>
     );
@@ -42,9 +54,19 @@ function RootLayoutNav() {
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
       <AnimatedSplashOverlay />
+
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+
+        <Stack.Screen
+          name="review/[locationId]"
+          options={{
+            headerShown: true,
+            title: 'Write a Review',
+          }}
+        />
       </Stack>
     </ThemeProvider>
   );
