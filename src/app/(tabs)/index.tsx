@@ -1,11 +1,14 @@
 // src/app/(tabs)/index.tsx - Discover
-// Host screen for Neha's stories #9 (filter/sort) and #7 (nearby).
+// Host screen for Neha's stories #9 (filter/sort), #7 (nearby), #12 (favorites).
 // NOTE for Sri: story #6 (browse list + open/closed status) owns the real
 // location card. This list intentionally renders a minimal card; extend or
 // replace renderCard with your design - the data and filter plumbing
 // around it should not need to change.
 
+import FavoriteButton from '@/components/FavoriteButton';
 import FilterSheet from '@/components/FilterSheet';
+import { useAuth } from '@/context/AuthContext';
+import { listFavoriteIds } from '@/lib/favorites';
 import {
   fetchLocations, type Coords, type DiscoverLocation, type Filters, type SortOption,
 } from '@/lib/locations';
@@ -16,7 +19,9 @@ import {
 } from 'react-native';
 
 export default function DiscoverScreen() {
+  const { user } = useAuth();
   const [locations, setLocations] = useState<DiscoverLocation[]>([]);
+  const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
   const [filters, setFilters] = useState<Filters>({});
   const [sort, setSort] = useState<SortOption>('name');
   const [coords, setCoords] = useState<Coords | null>(null);
@@ -30,12 +35,13 @@ export default function DiscoverScreen() {
     setError('');
     try {
       setLocations(await fetchLocations({ filters, sort, coords: nearbyOn ? coords : null }));
+      if (user) setFavoriteIds(await listFavoriteIds(user.id));
     } catch {
       setError('Could not load study locations. Pull to retry.');
     } finally {
       setLoading(false);
     }
-  }, [filters, sort, nearbyOn, coords]);
+  }, [filters, sort, nearbyOn, coords, user]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -86,6 +92,10 @@ export default function DiscoverScreen() {
           {item.distanceKm != null ? `  \u00B7  ${item.distanceKm.toFixed(1)} km away` : ''}
         </Text>
       </View>
+      <FavoriteButton
+        locationId={item.id}
+        initiallyFavorited={favoriteIds.has(item.id)}
+      />
     </View>
   );
 
