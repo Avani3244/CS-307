@@ -1,4 +1,5 @@
 import { useAuth } from '@/context/AuthContext';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
 import {
     ActivityIndicator,
@@ -17,11 +18,29 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [needsVerification, setNeedsVerification] = useState(false);
+  const [infoMessage, setInfoMessage] = useState('');
 
-  const { signIn } = useAuth();
+  const { signIn, resendVerification } = useAuth();
+  const router = useRouter();
+  const { notice } = useLocalSearchParams<{ notice?: string }>();
+
+  const handleResend = async () => {
+    setInfoMessage('');
+    const { error } = await resendVerification(email.trim());
+    if (error) {
+      setErrorMessage(error.message);
+    } else {
+      setErrorMessage('');
+      setNeedsVerification(false);
+      setInfoMessage('Verification email sent. Check your inbox.');
+    }
+  };
 
   const handleLogin = async () => {
     setErrorMessage('');
+    setInfoMessage('');
+    setNeedsVerification(false);
     const cleanEmail = email.trim();
 
     if (!cleanEmail || !password) {
@@ -36,6 +55,7 @@ export default function LoginScreen() {
     if (error) {
       if (error.message.toLowerCase().includes('email not confirmed')) {
         setErrorMessage('Email verification is required before continuing.');
+        setNeedsVerification(true);
       } else {
         setErrorMessage('Invalid email or password. Please try again.');
       }
@@ -62,9 +82,26 @@ export default function LoginScreen() {
           <Text style={styles.title}>StudySpot</Text>
           <Text style={styles.subtitle}>Purdue University Campus Locations</Text>
 
+          {notice === 'password-reset' && !errorMessage && !infoMessage ? (
+            <View style={styles.successBox}>
+              <Text style={styles.successText}>Password updated. Sign in with your new password.</Text>
+            </View>
+          ) : null}
+
+          {infoMessage ? (
+            <View style={styles.successBox}>
+              <Text style={styles.successText}>{infoMessage}</Text>
+            </View>
+          ) : null}
+
           {errorMessage ? (
             <View style={styles.errorBox}>
               <Text style={styles.errorText}>{errorMessage}</Text>
+              {needsVerification ? (
+                <TouchableOpacity onPress={handleResend}>
+                  <Text style={styles.resendText}>Resend verification email</Text>
+                </TouchableOpacity>
+              ) : null}
             </View>
           ) : null}
 
@@ -116,10 +153,10 @@ export default function LoginScreen() {
 
           {/* Footnotes / Extra links */}
           <View style={styles.footerLinks}>
-            <TouchableOpacity onPress={() => alert('Forgot Password flow handled by Adya')}>
+            <TouchableOpacity onPress={() => router.push('/forgot-password')}>
               <Text style={styles.linkText}>Forgot password?</Text>
             </TouchableOpacity>
-            <TouchableOpacity onPress={() => alert('Sign Up flow handled by Adya')}>
+            <TouchableOpacity onPress={() => router.push('/register')}>
               <Text style={[styles.linkText, styles.signUpLink]}>Create account</Text>
             </TouchableOpacity>
           </View>
@@ -209,6 +246,24 @@ const styles = StyleSheet.create({
     color: '#FCA5A5',
     fontSize: 13,
     textAlign: 'left',
+  },
+  successBox: {
+    backgroundColor: 'rgba(34, 197, 94, 0.1)',
+    borderLeftWidth: 3,
+    borderLeftColor: '#22C55E',
+    padding: 10,
+    borderRadius: 6,
+    marginBottom: 18,
+  },
+  successText: {
+    color: '#86EFAC',
+    fontSize: 13,
+  },
+  resendText: {
+    color: '#CEB888',
+    fontSize: 13,
+    fontWeight: '700',
+    marginTop: 8,
   },
   inputGroup: {
     marginBottom: 18,
