@@ -89,6 +89,7 @@ export default function ReviewScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedPhoto, setSelectedPhoto] =
     useState<ImagePicker.ImagePickerAsset | null>(null);
+  const [reviewsRefreshKey, setReviewsRefreshKey] = useState(0);
 
   const updateCategoryRating = (category: string, rating: number) => {
     setCategoryRatings((currentRatings) => ({
@@ -248,6 +249,8 @@ export default function ReviewScreen() {
         'Your review was submitted successfully.'
       );
 
+      setReviewsRefreshKey((current) => current + 1);
+
       console.log('Created review:', review.id);
 
       setOverallRating(null);
@@ -405,7 +408,10 @@ export default function ReviewScreen() {
           {isSubmitting ? 'Submitting...' : 'Submit Review'}
         </Text>
       </Pressable>
-      <LocationReviewsSection locationId={locationId} />
+      <LocationReviewsSection
+        locationId={locationId}
+        refreshKey={reviewsRefreshKey}
+      />
     </ScrollView>
   );
 }

@@ -15,6 +15,7 @@ import { getReviewsForLocation } from '@/lib/reviews';
 
 interface Props {
   locationId: string;
+  refreshKey?: number;
 }
 
 function formatCategoryName(name: string) {
@@ -23,7 +24,10 @@ function formatCategoryName(name: string) {
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
-export default function LocationReviewsSection({ locationId }: Props) {
+export default function LocationReviewsSection({
+  locationId,
+  refreshKey,
+}: Props) {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme === 'dark' ? 'dark' : 'light'];
 
@@ -57,7 +61,7 @@ export default function LocationReviewsSection({ locationId }: Props) {
 
   useEffect(() => {
     loadReviews();
-  }, [loadReviews]);
+  }, [loadReviews, refreshKey]);
 
   const overallAverage = useMemo(() => {
     if (reviews.length === 0) return null;
