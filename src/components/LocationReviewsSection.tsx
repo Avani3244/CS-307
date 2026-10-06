@@ -1,9 +1,11 @@
+import { Colors } from '@/constants/theme';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
   StyleSheet,
   Text,
+  useColorScheme,
   View,
 } from 'react-native';
 
@@ -22,6 +24,9 @@ function formatCategoryName(name: string) {
 }
 
 export default function LocationReviewsSection({ locationId }: Props) {
+  const colorScheme = useColorScheme();
+  const colors = Colors[colorScheme === 'dark' ? 'dark' : 'light'];
+
   const [reviews, setReviews] = useState<ReviewCardData[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -93,8 +98,10 @@ export default function LocationReviewsSection({ locationId }: Props) {
   if (loading) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator size="large" />
-        <Text style={styles.statusText}>Loading reviews...</Text>
+        <ActivityIndicator size="large" color={colors.text} />
+        <Text style={[styles.statusText, { color: colors.textSecondary }]}>
+          Loading reviews...
+        </Text>
       </View>
     );
   }
@@ -118,7 +125,9 @@ export default function LocationReviewsSection({ locationId }: Props) {
   return (
     <View>
       <View style={styles.headingRow}>
-        <Text style={styles.heading}>Reviews</Text>
+        <Text style={[styles.heading, { color: colors.text }]}>
+          Reviews
+        </Text>
 
         <Pressable
           accessibilityRole="button"
@@ -132,20 +141,34 @@ export default function LocationReviewsSection({ locationId }: Props) {
       </View>
 
       {overallAverage !== null && (
-        <View style={styles.summary}>
-          <Text style={styles.overallRating}>
+        <View
+          style={[
+            styles.summary,
+            {
+              backgroundColor: colors.backgroundElement,
+              borderColor: colors.textSecondary,
+            },
+          ]}
+        >
+          <Text style={[styles.overallRating, { color: colors.text }]}>
             ★ {overallAverage.toFixed(1)}
           </Text>
 
-          <Text style={styles.reviewCount}>
+          <Text style={[styles.reviewCount, { color: colors.textSecondary }]}>
             {reviews.length} {reviews.length === 1 ? 'review' : 'reviews'}
           </Text>
 
           {categoryAverages.length > 0 && (
             <View style={styles.categorySummary}>
               {categoryAverages.map(({ category, average }) => (
-                <View key={category} style={styles.categoryChip}>
-                  <Text style={styles.categoryText}>
+                <View
+                  key={category}
+                  style={[
+                    styles.categoryChip,
+                    { backgroundColor: colors.backgroundSelected },
+                  ]}
+                >
+                  <Text style={[styles.categoryText, { color: colors.text }]}>
                     {formatCategoryName(category)}: {average.toFixed(1)}
                   </Text>
                 </View>
@@ -169,7 +192,6 @@ const styles = StyleSheet.create({
 
   statusText: {
     marginTop: 10,
-    color: '#60646C',
   },
 
   error: {
@@ -188,7 +210,7 @@ const styles = StyleSheet.create({
   },
 
   retryText: {
-    color: '#fff',
+    color: '#ffffff',
     fontWeight: '700',
   },
 
@@ -217,7 +239,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     padding: 16,
     borderRadius: 14,
-    backgroundColor: '#F0F0F3',
+    borderWidth: 1,
   },
 
   overallRating: {
@@ -227,7 +249,6 @@ const styles = StyleSheet.create({
 
   reviewCount: {
     marginTop: 3,
-    color: '#60646C',
   },
 
   categorySummary: {
@@ -241,11 +262,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 9,
     paddingVertical: 5,
     borderRadius: 12,
-    backgroundColor: '#fff',
   },
 
   categoryText: {
     fontSize: 12,
-    color: '#444',
   },
 });

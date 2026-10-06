@@ -1,26 +1,44 @@
 // src/app/(tabs)/index.tsx - Discover
-// Host screen for Neha's stories #9 (filter/sort), #7 (nearby), #12 (favorites), #17 (crowd reports).
-// NOTE for Sri: story #6 (browse list + open/closed status) owns the real
-// location card. This list intentionally renders a minimal card; extend or
-// replace renderCard with your design - the data and filter plumbing
-// around it should not need to change.
+// Host screen for Neha's stories #9 (filter/sort), #7 (nearby),
+// #12 (favorites), #17 (crowd reports).
 
 import CrowdReportSheet from '@/components/CrowdReportSheet';
 import FavoriteButton from '@/components/FavoriteButton';
 import FilterSheet from '@/components/FilterSheet';
+import { Colors } from '@/constants/theme';
 import { useAuth } from '@/context/AuthContext';
 import { listFavoriteIds } from '@/lib/favorites';
 import {
-  fetchLocations, type Coords, type DiscoverLocation, type Filters, type SortOption,
+  fetchLocations,
+  type Coords,
+  type DiscoverLocation,
+  type Filters,
+  type SortOption,
 } from '@/lib/locations';
+
 import * as Location from 'expo-location';
 import { useCallback, useEffect, useState } from 'react';
+
 import {
-  ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, View,
+  ActivityIndicator,
+  FlatList,
+  Pressable,
+  RefreshControl,
+  StyleSheet,
+  Text,
+  useColorScheme,
+  View,
 } from 'react-native';
+
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function DiscoverScreen() {
   const { user } = useAuth();
+
+  const colorScheme = useColorScheme();
+  const colors = Colors[colorScheme === 'dark' ? 'dark' : 'light'];
+  const insets = useSafeAreaInsets();
+
   const [locations, setLocations] = useState<DiscoverLocation[]>([]);
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
   const [filters, setFilters] = useState<Filters>({});
@@ -35,9 +53,19 @@ export default function DiscoverScreen() {
 
   const load = useCallback(async () => {
     setError('');
+
     try {
-      setLocations(await fetchLocations({ filters, sort, coords: nearbyOn ? coords : null }));
-      if (user) setFavoriteIds(await listFavoriteIds(user.id));
+      setLocations(
+        await fetchLocations({
+          filters,
+          sort,
+          coords: nearbyOn ? coords : null,
+        })
+      );
+
+      if (user) {
+        setFavoriteIds(await listFavoriteIds(user.id));
+      }
     } catch {
       setError('Could not load study locations. Pull to retry.');
     } finally {
@@ -45,23 +73,39 @@ export default function DiscoverScreen() {
     }
   }, [filters, sort, nearbyOn, coords, user]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+  }, [load]);
 
-  // Story #7: nearby toggle with permission handling and denied fallback
   const toggleNearby = async () => {
     if (nearbyOn) {
       setNearbyOn(false);
       setNearbyMessage('');
-      if (sort === 'distance') setSort('name');
+
+      if (sort === 'distance') {
+        setSort('name');
+      }
+
       return;
     }
-    const { status } = await Location.requestForegroundPermissionsAsync();
+
+    const { status } =
+      await Location.requestForegroundPermissionsAsync();
+
     if (status !== 'granted') {
-      setNearbyMessage('Location permission denied, so nearby results are unavailable. Showing the default list.');
+      setNearbyMessage(
+        'Location permission denied, so nearby results are unavailable. Showing the default list.'
+      );
       return;
     }
+
     const position = await Location.getCurrentPositionAsync({});
-    setCoords({ latitude: position.coords.latitude, longitude: position.coords.longitude });
+
+    setCoords({
+      latitude: position.coords.latitude,
+      longitude: position.coords.longitude,
+    });
+
     setNearbyOn(true);
     setNearbyMessage('');
     setSort('distance');
@@ -71,6 +115,7 @@ export default function DiscoverScreen() {
     if (nearbyOn) {
       try {
         const position = await Location.getCurrentPositionAsync({});
+
         setCoords({
           latitude: position.coords.latitude,
           longitude: position.coords.longitude,
@@ -86,20 +131,38 @@ export default function DiscoverScreen() {
   const activeFilterCount = Object.keys(filters).length;
 
   const renderCard = ({ item }: { item: DiscoverLocation }) => (
-    <View style={styles.card}>
-      <View style={{ flex: 1 }}>
-        <Text style={styles.cardName}>{item.name}</Text>
-        <Text style={styles.cardMeta}>
-          {item.category ?? 'Study spot'}
-          {item.distanceKm != null ? `  \u00B7  ${item.distanceKm.toFixed(1)} km away` : ''}
+    <View
+      style={[
+        styles.card,
+        { backgroundColor: colors.backgroundElement },
+      ]}
+    >
+      <View style={styles.cardContent}>
+        <Text style={[styles.cardName, { color: colors.text }]}>
+          {item.name}
         </Text>
+
+        <Text
+          style={[
+            styles.cardMeta,
+            { color: colors.textSecondary },
+          ]}
+        >
+          {item.category ?? 'Study spot'}
+          {item.distanceKm != null
+            ? `  ·  ${item.distanceKm.toFixed(1)} km away`
+            : ''}
+        </Text>
+
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={`Report current conditions at ${item.name}`}
-          onPress={() => setReporting(item)}>
+          onPress={() => setReporting(item)}
+        >
           <Text style={styles.reportLink}>Report conditions</Text>
         </Pressable>
       </View>
+
       <FavoriteButton
         locationId={item.id}
         initiallyFavorited={favoriteIds.has(item.id)}
@@ -108,48 +171,127 @@ export default function DiscoverScreen() {
   );
 
   return (
-    <View style={styles.container}>
+    <View
+      style={[
+        styles.container,
+        {
+          backgroundColor: colors.background,
+          paddingTop: insets.top,
+        },
+      ]}
+    >
       <View style={styles.controls}>
         <Pressable
           accessibilityRole="button"
           accessibilityState={{ selected: nearbyOn }}
-          style={[styles.controlButton, nearbyOn && styles.controlButtonOn]}
-          onPress={toggleNearby}>
-          <Text style={[styles.controlText, nearbyOn && styles.controlTextOn]}>
+          style={[
+            styles.controlButton,
+            { backgroundColor: colors.backgroundElement },
+            nearbyOn && styles.controlButtonOn,
+          ]}
+          onPress={toggleNearby}
+        >
+          <Text
+            style={[
+              styles.controlText,
+              { color: colors.text },
+              nearbyOn && styles.controlTextOn,
+            ]}
+          >
             {nearbyOn ? 'Nearby: on' : 'Nearby'}
           </Text>
         </Pressable>
+
         <Pressable
           accessibilityRole="button"
-          style={[styles.controlButton, activeFilterCount > 0 && styles.controlButtonOn]}
-          onPress={() => setFilterSheetOpen(true)}>
-          <Text style={[styles.controlText, activeFilterCount > 0 && styles.controlTextOn]}>
-            Filters{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}
+          style={[
+            styles.controlButton,
+            { backgroundColor: colors.backgroundElement },
+            activeFilterCount > 0 && styles.controlButtonOn,
+          ]}
+          onPress={() => setFilterSheetOpen(true)}
+        >
+          <Text
+            style={[
+              styles.controlText,
+              { color: colors.text },
+              activeFilterCount > 0 && styles.controlTextOn,
+            ]}
+          >
+            Filters
+            {activeFilterCount > 0
+              ? ` (${activeFilterCount})`
+              : ''}
           </Text>
         </Pressable>
       </View>
 
-      {!!nearbyMessage && <Text style={styles.notice}>{nearbyMessage}</Text>}
-      {!!error && <Text style={styles.noticeError}>{error}</Text>}
+      {!!nearbyMessage && (
+        <Text
+          style={[
+            styles.notice,
+            { color: colors.textSecondary },
+          ]}
+        >
+          {nearbyMessage}
+        </Text>
+      )}
+
+      {!!error && (
+        <Text style={styles.noticeError}>{error}</Text>
+      )}
 
       {loading ? (
-        <ActivityIndicator style={{ marginTop: 48 }} size="large" color="#208AEF" />
+        <ActivityIndicator
+          style={styles.loading}
+          size="large"
+          color="#208AEF"
+        />
       ) : (
         <FlatList
           data={locations}
           keyExtractor={(item) => item.id}
           renderItem={renderCard}
           refreshControl={
-            <RefreshControl refreshing={false} onRefresh={refreshLocations} />
+            <RefreshControl
+              refreshing={false}
+              onRefresh={refreshLocations}
+            />
           }
-          contentContainerStyle={locations.length === 0 && styles.emptyWrap}
+          contentContainerStyle={
+            locations.length === 0
+              ? styles.emptyWrap
+              : styles.list
+          }
           ListEmptyComponent={
             <View style={styles.empty}>
-              <Text style={styles.emptyTitle}>No study spots match your filters</Text>
-              <Text style={styles.emptyBody}>Try removing a filter, or clear them all to see every location.</Text>
+              <Text
+                style={[
+                  styles.emptyTitle,
+                  { color: colors.text },
+                ]}
+              >
+                No study spots match your filters
+              </Text>
+
+              <Text
+                style={[
+                  styles.emptyBody,
+                  { color: colors.textSecondary },
+                ]}
+              >
+                Try removing a filter, or clear them all to see every
+                location.
+              </Text>
+
               {activeFilterCount > 0 && (
-                <Pressable accessibilityRole="button" onPress={() => setFilters({})}>
-                  <Text style={styles.emptyClear}>Clear all filters</Text>
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => setFilters({})}
+                >
+                  <Text style={styles.emptyClear}>
+                    Clear all filters
+                  </Text>
                 </Pressable>
               )}
             </View>
@@ -166,6 +308,7 @@ export default function DiscoverScreen() {
         onChangeSort={setSort}
         onClose={() => setFilterSheetOpen(false)}
       />
+
       <CrowdReportSheet
         locationId={reporting?.id ?? null}
         locationName={reporting?.name}
@@ -176,21 +319,115 @@ export default function DiscoverScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff' },
-  controls: { flexDirection: 'row', gap: 10, padding: 14 },
-  controlButton: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 18, borderRadius: 22, backgroundColor: '#F0F0F3' },
-  controlButtonOn: { backgroundColor: '#208AEF' },
-  controlText: { fontSize: 14, fontWeight: '600', color: '#000' },
-  controlTextOn: { color: '#fff' },
-  notice: { marginHorizontal: 14, marginBottom: 6, color: '#60646C' },
-  noticeError: { marginHorizontal: 14, marginBottom: 6, color: '#C62828' },
-  card: { flexDirection: 'row', alignItems: 'center', marginHorizontal: 14, marginBottom: 10, padding: 14, borderRadius: 12, backgroundColor: '#F0F0F3' },
-  cardName: { fontSize: 16, fontWeight: '700' },
-  cardMeta: { marginTop: 2, fontSize: 13, color: '#60646C' },
-  reportLink: { marginTop: 8, color: '#208AEF', fontWeight: '600', fontSize: 13, minHeight: 24 },
-  emptyWrap: { flexGrow: 1, justifyContent: 'center' },
-  empty: { alignItems: 'center', paddingHorizontal: 32 },
-  emptyTitle: { fontSize: 16, fontWeight: '700', textAlign: 'center' },
-  emptyBody: { marginTop: 6, fontSize: 14, color: '#60646C', textAlign: 'center' },
-  emptyClear: { marginTop: 12, color: '#208AEF', fontWeight: '700', minHeight: 44, textAlignVertical: 'center' },
+  container: {
+    flex: 1,
+  },
+
+  controls: {
+    flexDirection: 'row',
+    gap: 10,
+    paddingHorizontal: 14,
+    paddingTop: 10,
+    paddingBottom: 14,
+  },
+
+  controlButton: {
+    minHeight: 44,
+    justifyContent: 'center',
+    paddingHorizontal: 18,
+    borderRadius: 22,
+  },
+
+  controlButtonOn: {
+    backgroundColor: '#208AEF',
+  },
+
+  controlText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+
+  controlTextOn: {
+    color: '#ffffff',
+  },
+
+  notice: {
+    marginHorizontal: 14,
+    marginBottom: 6,
+  },
+
+  noticeError: {
+    marginHorizontal: 14,
+    marginBottom: 6,
+    color: '#C62828',
+  },
+
+  loading: {
+    marginTop: 48,
+  },
+
+  list: {
+    paddingBottom: 16,
+  },
+
+  card: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 14,
+    marginBottom: 10,
+    padding: 14,
+    borderRadius: 16,
+  },
+
+  cardContent: {
+    flex: 1,
+  },
+
+  cardName: {
+    fontSize: 16,
+    fontWeight: '700',
+  },
+
+  cardMeta: {
+    marginTop: 2,
+    fontSize: 13,
+  },
+
+  reportLink: {
+    marginTop: 8,
+    color: '#208AEF',
+    fontWeight: '600',
+    fontSize: 13,
+    minHeight: 24,
+  },
+
+  emptyWrap: {
+    flexGrow: 1,
+    justifyContent: 'center',
+  },
+
+  empty: {
+    alignItems: 'center',
+    paddingHorizontal: 32,
+  },
+
+  emptyTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+
+  emptyBody: {
+    marginTop: 6,
+    fontSize: 14,
+    textAlign: 'center',
+  },
+
+  emptyClear: {
+    marginTop: 12,
+    color: '#208AEF',
+    fontWeight: '700',
+    minHeight: 44,
+    textAlignVertical: 'center',
+  },
 });
