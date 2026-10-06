@@ -1,4 +1,5 @@
-import { Image, StyleSheet, Text, View } from 'react-native';
+import { Colors } from '@/constants/theme';
+import { Image, StyleSheet, Text, useColorScheme, View } from 'react-native';
 
 export interface ReviewCardData {
   id: string;
@@ -21,18 +22,37 @@ function formatCategoryName(name: string) {
 }
 
 export default function ReviewCard({ review }: Props) {
+  const colorScheme = useColorScheme();
+  const colors = Colors[colorScheme === 'dark' ? 'dark' : 'light'];
+
   return (
-    <View style={styles.card}>
+    <View
+      style={[
+        styles.card,
+        {
+          backgroundColor: colors.backgroundElement,
+          borderColor: colors.textSecondary,
+        },
+      ]}
+    >
       <View style={styles.header}>
         <View>
-          <Text style={styles.reviewer}>{review.reviewerName}</Text>
-          <Text style={styles.date}>
+          <Text style={[styles.reviewer, { color: colors.text }]}>
+            {review.reviewerName}
+          </Text>
+
+          <Text style={[styles.date, { color: colors.textSecondary }]}>
             {new Date(review.createdAt).toLocaleDateString()}
           </Text>
         </View>
 
-        <View style={styles.ratingBadge}>
-          <Text style={styles.ratingText}>
+        <View
+          style={[
+            styles.ratingBadge,
+            { backgroundColor: colors.backgroundSelected },
+          ]}
+        >
+          <Text style={[styles.ratingText, { color: colors.text }]}>
             ★ {review.overallRating.toFixed(1)}
           </Text>
         </View>
@@ -42,8 +62,14 @@ export default function ReviewCard({ review }: Props) {
         Object.entries(review.categoryRatings).length > 0 && (
           <View style={styles.categories}>
             {Object.entries(review.categoryRatings).map(([name, rating]) => (
-              <View key={name} style={styles.categoryChip}>
-                <Text style={styles.categoryText}>
+              <View
+                key={name}
+                style={[
+                  styles.categoryChip,
+                  { backgroundColor: colors.backgroundSelected },
+                ]}
+              >
+                <Text style={[styles.categoryText, { color: colors.text }]}>
                   {formatCategoryName(name)}: {rating}/5
                 </Text>
               </View>
@@ -52,7 +78,9 @@ export default function ReviewCard({ review }: Props) {
         )}
 
       {!!review.reviewText && (
-        <Text style={styles.reviewText}>{review.reviewText}</Text>
+        <Text style={[styles.reviewText, { color: colors.text }]}>
+          {review.reviewText}
+        </Text>
       )}
 
       {!!review.photoUrl && (
@@ -72,7 +100,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     padding: 16,
     borderRadius: 14,
-    backgroundColor: '#F0F0F3',
+    borderWidth: 1,
   },
 
   header: {
@@ -84,26 +112,22 @@ const styles = StyleSheet.create({
   reviewer: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#111',
   },
 
   date: {
     marginTop: 2,
     fontSize: 12,
-    color: '#60646C',
   },
 
   ratingBadge: {
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 14,
-    backgroundColor: '#fff',
   },
 
   ratingText: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#111',
   },
 
   categories: {
@@ -117,19 +141,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 9,
     paddingVertical: 5,
     borderRadius: 12,
-    backgroundColor: '#fff',
   },
 
   categoryText: {
     fontSize: 12,
-    color: '#444',
   },
 
   reviewText: {
     marginTop: 12,
     fontSize: 15,
     lineHeight: 21,
-    color: '#222',
   },
 
   photo: {
