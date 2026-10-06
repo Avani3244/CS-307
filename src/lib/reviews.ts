@@ -142,3 +142,25 @@ export async function deleteReview(reviewId: string) {
     throw deleteError;
   }
 }
+
+export async function updateReview(
+  reviewId: string,
+  updates: {
+    overallRating: number;
+    categoryRatings: Record<string, number>;
+    reviewText: string;
+  }
+) {
+  const { error } = await supabase
+    .from('reviews')
+    .update({
+      overall_rating: updates.overallRating,
+      category_ratings: updates.categoryRatings,
+      review_text: updates.reviewText.trim() || null,
+    })
+    .eq('id', reviewId);
+
+  if (error) {
+    throw error;
+  }
+}

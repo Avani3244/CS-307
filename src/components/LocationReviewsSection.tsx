@@ -12,7 +12,11 @@ import {
 import type { ReviewCardData } from '@/components/ReviewCard';
 import ReviewList from '@/components/ReviewList';
 import { useAuth } from '@/context/AuthContext';
-import { deleteReview, getReviewsForLocation } from '@/lib/reviews';
+import {
+  deleteReview,
+  getReviewsForLocation,
+  updateReview,
+} from '@/lib/reviews';
 
 interface Props {
   locationId: string;
@@ -75,6 +79,27 @@ export default function LocationReviewsSection({
       await loadReviews(true);
     } catch {
       setError('Could not delete the review. Please try again.');
+    }
+  };
+
+  const handleEditReview = async (
+    reviewId: string,
+    updates: {
+      overallRating: number;
+      categoryRatings: Record<string, number>;
+      reviewText: string;
+    }
+  ) => {
+    try {
+      setError('');
+
+      await updateReview(reviewId, updates);
+
+      // Automatically reload reviews and summaries after editing.
+      await loadReviews(true);
+    } catch {
+      setError('Could not update the review. Please try again.');
+      throw new Error('Could not update review');
     }
   };
 
@@ -216,6 +241,7 @@ export default function LocationReviewsSection({
         reviews={reviews}
         currentUserId={user?.id}
         onDeleteReview={handleDeleteReview}
+        onEditReview={handleEditReview}
       />
     </View>
   );
