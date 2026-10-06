@@ -10,6 +10,11 @@ type ReviewRow = {
   created_at: string;
 };
 
+type ReviewPhotoRow = {
+  review_id: string;
+  storage_path: string;
+};
+
 export async function getReviewsForLocation(
   locationId: string
 ): Promise<ReviewCardData[]> {
@@ -32,14 +37,27 @@ export async function getReviewsForLocation(
   }
 
   const userIds = [...new Set(reviewRows.map((review) => review.user_id))];
+  const reviewIds = reviewRows.map((review) => review.id);
 
-  const { data: profiles, error: profilesError } = await supabase
-    .from('profiles')
-    .select('user_id, username')
-    .in('user_id', userIds);
+  const [{ data: profiles, error: profilesError }, { data: photos, error: photosError }] =
+    await Promise.all([
+      supabase
+        .from('profiles')
+        .select('user_id, username')
+        .in('user_id', userIds),
+
+      supabase
+        .from('review_photos')
+        .select('review_id, storage_path')
+        .in('review_id', reviewIds),
+    ]);
 
   if (profilesError) {
     throw profilesError;
+  }
+
+  if (photosError) {
+    throw photosError;
   }
 
   const usernameByUserId = new Map(
@@ -49,6 +67,33 @@ export async function getReviewsForLocation(
     ])
   );
 
+  const photoRows = (photos ?? []) as ReviewPhotoRow[];
+
+  const photoEntries = await Promise.all(
+    photoRows.map(async (photo) => {
+      const { data, error } = await supabase.storage
+        .from('review-photos')
+        .createSignedUrl(photo.storage_path, 60 * 60);
+
+      if (error || !data?.signedUrl) {
+        return null;
+      }
+
+      return {
+        reviewId: photo.review_id,
+        url: data.signedUrl,
+      };
+    })
+  );
+
+  const photoUrlByReviewId = new Map<string, string>();
+
+  photoEntries.forEach((entry) => {
+    if (entry && !photoUrlByReviewId.has(entry.reviewId)) {
+      photoUrlByReviewId.set(entry.reviewId, entry.url);
+    }
+  });
+
   return reviewRows.map((review) => ({
     id: review.id,
     reviewerName:
@@ -57,6 +102,6 @@ export async function getReviewsForLocation(
     categoryRatings: review.category_ratings,
     reviewText: review.review_text,
     createdAt: review.created_at,
-    photoUrl: null,
+    photoUrl: photoUrlByReviewId.get(review.id) ?? null,
   }));
 }
