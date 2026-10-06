@@ -1,7 +1,16 @@
-import { Image, StyleSheet, Text, View } from 'react-native';
+import { useState } from 'react';
+import {
+  Alert,
+  Image,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 
 export interface ReviewCardData {
   id: string;
+  userId: string;
   reviewerName: string;
   overallRating: number;
   categoryRatings?: Record<string, number> | null;
@@ -12,6 +21,8 @@ export interface ReviewCardData {
 
 interface Props {
   review: ReviewCardData;
+  isOwnReview?: boolean;
+  onDeleteReview?: (reviewId: string) => Promise<void>;
 }
 
 function formatCategoryName(name: string) {
@@ -20,18 +31,61 @@ function formatCategoryName(name: string) {
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
-export default function ReviewCard({ review }: Props) {
+export default function ReviewCard({
+  review,
+  isOwnReview = false,
+  onDeleteReview,
+}: Props) {
+  const [deleting, setDeleting] = useState(false);
+
+  const handleDeletePress = () => {
+    Alert.alert(
+      'Delete review?',
+      'This review will be permanently deleted.',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            if (!onDeleteReview || deleting) {
+              return;
+            }
+
+            try {
+              setDeleting(true);
+              await onDeleteReview(review.id);
+            } finally {
+              setDeleting(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
   return (
     <View style={styles.card}>
       <View style={styles.header}>
         <View style={styles.reviewerInfo}>
-          <Text
-            numberOfLines={1}
-            ellipsizeMode="tail"
-            style={styles.reviewer}
-          >
-            {review.reviewerName}
-          </Text>
+          <View style={styles.nameRow}>
+            <Text
+              numberOfLines={1}
+              ellipsizeMode="tail"
+              style={styles.reviewer}
+            >
+              {review.reviewerName}
+            </Text>
+
+            {isOwnReview && (
+              <View style={styles.yourReviewBadge}>
+                <Text style={styles.yourReviewText}>Your review</Text>
+              </View>
+            )}
+          </View>
 
           <Text style={styles.date}>
             {new Date(review.createdAt).toLocaleDateString()}
@@ -77,6 +131,24 @@ export default function ReviewCard({ review }: Props) {
           />
         </View>
       )}
+
+      {isOwnReview && onDeleteReview && (
+        <View style={styles.ownerActions}>
+          <Pressable
+            accessibilityRole="button"
+            disabled={deleting}
+            onPress={handleDeletePress}
+            style={[
+              styles.deleteButton,
+              deleting && styles.disabledButton,
+            ]}
+          >
+            <Text style={styles.deleteText}>
+              {deleting ? 'Deleting...' : 'Delete'}
+            </Text>
+          </Pressable>
+        </View>
+      )}
     </View>
   );
 }
@@ -113,11 +185,33 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
 
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    minWidth: 0,
+  },
+
   reviewer: {
+    flexShrink: 1,
     fontSize: 16,
     fontWeight: '700',
     lineHeight: 21,
     color: '#2B211C',
+  },
+
+  yourReviewBadge: {
+    flexShrink: 0,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 10,
+    backgroundColor: '#C7B0A2',
+  },
+
+  yourReviewText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#493A32',
   },
 
   date: {
@@ -195,5 +289,34 @@ const styles = StyleSheet.create({
   photo: {
     width: '100%',
     height: 220,
+  },
+
+  ownerActions: {
+    marginTop: 16,
+    paddingTop: 14,
+    borderTopWidth: 1,
+    borderTopColor: '#92796B',
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+  },
+
+  deleteButton: {
+    minHeight: 38,
+    paddingHorizontal: 16,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#7A403B',
+    backgroundColor: '#C89F98',
+    justifyContent: 'center',
+  },
+
+  deleteText: {
+    color: '#572D29',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+
+  disabledButton: {
+    opacity: 0.55,
   },
 });

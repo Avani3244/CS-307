@@ -11,7 +11,8 @@ import {
 
 import type { ReviewCardData } from '@/components/ReviewCard';
 import ReviewList from '@/components/ReviewList';
-import { getReviewsForLocation } from '@/lib/reviews';
+import { useAuth } from '@/context/AuthContext';
+import { deleteReview, getReviewsForLocation } from '@/lib/reviews';
 
 interface Props {
   locationId: string;
@@ -30,6 +31,7 @@ export default function LocationReviewsSection({
 }: Props) {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme === 'dark' ? 'dark' : 'light'];
+  const { user } = useAuth();
 
   const [reviews, setReviews] = useState<ReviewCardData[]>([]);
   const [loading, setLoading] = useState(true);
@@ -63,8 +65,23 @@ export default function LocationReviewsSection({
     loadReviews();
   }, [loadReviews, refreshKey]);
 
+  const handleDeleteReview = async (reviewId: string) => {
+    try {
+      setError('');
+
+      await deleteReview(reviewId);
+
+      // Automatically reload reviews and rating summaries after deletion.
+      await loadReviews(true);
+    } catch {
+      setError('Could not delete the review. Please try again.');
+    }
+  };
+
   const overallAverage = useMemo(() => {
-    if (reviews.length === 0) return null;
+    if (reviews.length === 0) {
+      return null;
+    }
 
     const total = reviews.reduce(
       (sum, review) => sum + review.overallRating,
@@ -78,7 +95,9 @@ export default function LocationReviewsSection({
     const totals: Record<string, { total: number; count: number }> = {};
 
     reviews.forEach((review) => {
-      if (!review.categoryRatings) return;
+      if (!review.categoryRatings) {
+        return;
+      }
 
       Object.entries(review.categoryRatings).forEach(([category, rating]) => {
         if (!totals[category]) {
@@ -103,6 +122,7 @@ export default function LocationReviewsSection({
     return (
       <View style={styles.centered}>
         <ActivityIndicator size="large" color={colors.text} />
+
         <Text style={[styles.statusText, { color: colors.textSecondary }]}>
           Loading reviews...
         </Text>
@@ -130,9 +150,8 @@ export default function LocationReviewsSection({
     <View>
       <View style={styles.headingRow}>
         <View>
-          <Text style={[styles.heading, { color: '#2E2621' }]}>
-            Reviews
-          </Text>
+          <Text style={styles.heading}>Reviews</Text>
+
           <Text style={styles.headingSubtitle}>
             What students are saying
           </Text>
@@ -182,6 +201,7 @@ export default function LocationReviewsSection({
                   <Text style={styles.categoryLabel}>
                     {formatCategoryName(category)}
                   </Text>
+
                   <Text style={styles.categoryValue}>
                     {average.toFixed(1)}
                   </Text>
@@ -192,8 +212,11 @@ export default function LocationReviewsSection({
         </View>
       )}
 
-
-      <ReviewList reviews={reviews} />
+      <ReviewList
+        reviews={reviews}
+        currentUserId={user?.id}
+        onDeleteReview={handleDeleteReview}
+      />
     </View>
   );
 }
@@ -242,6 +265,7 @@ const styles = StyleSheet.create({
   heading: {
     fontSize: 27,
     fontWeight: '800',
+    color: '#2B211C',
   },
 
   headingSubtitle: {

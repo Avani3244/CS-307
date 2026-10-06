@@ -4,9 +4,15 @@ import ReviewCard, { type ReviewCardData } from '@/components/ReviewCard';
 
 interface Props {
   reviews: ReviewCardData[];
+  currentUserId?: string;
+  onDeleteReview?: (reviewId: string) => Promise<void>;
 }
 
-export default function ReviewList({ reviews }: Props) {
+export default function ReviewList({
+  reviews,
+  currentUserId,
+  onDeleteReview,
+}: Props) {
   if (reviews.length === 0) {
     return (
       <View style={styles.empty}>
@@ -22,7 +28,13 @@ export default function ReviewList({ reviews }: Props) {
     <FlatList
       data={reviews}
       keyExtractor={(review) => review.id}
-      renderItem={({ item }) => <ReviewCard review={item} />}
+      renderItem={({ item }) => (
+        <ReviewCard
+          review={item}
+          isOwnReview={item.userId === currentUserId}
+          onDeleteReview={onDeleteReview}
+        />
+      )}
       contentContainerStyle={styles.list}
       scrollEnabled={false}
     />
