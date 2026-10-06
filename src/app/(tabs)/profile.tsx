@@ -3,15 +3,15 @@ import { supabase } from '@/lib/supabase';
 import * as ImagePicker from 'expo-image-picker';
 import { useEffect, useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    Image,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  Alert,
+  Image,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 
 export default function ProfileScreen() {
@@ -52,7 +52,6 @@ export default function ProfileScreen() {
         .single();
 
       if (error && error.code !== 'PGRST116') {
-        // PGRST116 is code for "no rows returned" (new user)
         throw error;
       }
 
@@ -63,7 +62,6 @@ export default function ProfileScreen() {
         setEditUsername(data.username || '');
         setEditBio(data.bio || '');
       } else {
-        // New user without a profile yet -> open edit mode
         setIsEditing(true);
       }
     } catch (err: any) {
@@ -125,7 +123,6 @@ export default function ProfileScreen() {
     setSuccessMessage('');
     const cleanUsername = editUsername.trim();
 
-    // Client-side username validation
     if (!cleanUsername) {
       setErrorMessage('Username is required.');
       return;
@@ -142,7 +139,6 @@ export default function ProfileScreen() {
     try {
       setSaving(true);
 
-      // Check for duplicate username (used by another user)
       const { data: existingUser, error: checkError } = await supabase
         .from('profiles')
         .select('id')
@@ -157,13 +153,11 @@ export default function ProfileScreen() {
         return;
       }
 
-      // Upload new avatar if chosen
       let finalAvatarUrl = avatarUrl;
       if (newImageUri) {
         finalAvatarUrl = await uploadAvatar(newImageUri);
       }
 
-      // Upsert profile record
       const updates = {
         id: user?.id,
         username: cleanUsername,
@@ -175,7 +169,6 @@ export default function ProfileScreen() {
       const { error: saveError } = await supabase.from('profiles').upsert(updates);
       if (saveError) throw saveError;
 
-      // Update local state
       setUsername(cleanUsername);
       setBio(editBio.trim());
       setAvatarUrl(finalAvatarUrl);
@@ -201,9 +194,10 @@ export default function ProfileScreen() {
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.scrollContent}>
-      {/* Top Gold Accent Bar */}
+      {/* Top Gold Accent Line */}
       <View style={styles.topAccentBar} />
 
+      {/* Header Bar with Action Button */}
       <View style={styles.headerRow}>
         <Text style={styles.screenTitle}>BOILER PROFILE</Text>
         {!isEditing && (
@@ -236,7 +230,6 @@ export default function ProfileScreen() {
 
       {/* Main Profile Card */}
       <View style={styles.card}>
-        {/* Avatar Section */}
         <View style={styles.avatarWrapper}>
           {currentDisplayPhoto ? (
             <Image source={{ uri: currentDisplayPhoto }} style={styles.avatarImage} />
@@ -255,7 +248,6 @@ export default function ProfileScreen() {
           )}
         </View>
 
-        {/* View vs Edit Mode */}
         {isEditing ? (
           <View style={styles.formContainer}>
             <View style={styles.inputGroup}>
@@ -326,7 +318,7 @@ export default function ProfileScreen() {
         )}
       </View>
 
-      {/* Logout Button (User Story #2 Task 2.2) */}
+      {/* Logout Action */}
       <TouchableOpacity style={styles.logoutButton} onPress={signOut}>
         <Text style={styles.logoutButtonText}>Log Out</Text>
       </TouchableOpacity>
@@ -340,8 +332,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#121212',
   },
   scrollContent: {
-    padding: 20,
-    paddingTop: 40,
+    paddingHorizontal: 20,
+    paddingTop: 96, // Ample clearance beneath floating web navbar
+    paddingBottom: 60,
     alignItems: 'center',
   },
   loadingContainer: {
