@@ -1,3 +1,4 @@
+import LocationReviewsSection from '@/components/LocationReviewsSection';
 import { Colors } from '@/constants/theme';
 import { supabase } from '@/lib/supabase';
 import { decode } from 'base64-arraybuffer';
@@ -404,6 +405,7 @@ export default function ReviewScreen() {
           {isSubmitting ? 'Submitting...' : 'Submit Review'}
         </Text>
       </Pressable>
+      <LocationReviewsSection locationId={locationId} />
     </ScrollView>
   );
 }
