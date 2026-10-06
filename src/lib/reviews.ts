@@ -39,18 +39,20 @@ export async function getReviewsForLocation(
   const userIds = [...new Set(reviewRows.map((review) => review.user_id))];
   const reviewIds = reviewRows.map((review) => review.id);
 
-  const [{ data: profiles, error: profilesError }, { data: photos, error: photosError }] =
-    await Promise.all([
-      supabase
-        .from('profiles')
-        .select('user_id, username')
-        .in('user_id', userIds),
+  const [
+    { data: profiles, error: profilesError },
+    { data: photos, error: photosError },
+  ] = await Promise.all([
+    supabase
+      .from('profiles')
+      .select('user_id, username')
+      .in('user_id', userIds),
 
-      supabase
-        .from('review_photos')
-        .select('review_id, storage_path')
-        .in('review_id', reviewIds),
-    ]);
+    supabase
+      .from('review_photos')
+      .select('review_id, storage_path')
+      .in('review_id', reviewIds),
+  ]);
 
   if (profilesError) {
     throw profilesError;
@@ -96,6 +98,7 @@ export async function getReviewsForLocation(
 
   return reviewRows.map((review) => ({
     id: review.id,
+    userId: review.user_id,
     reviewerName:
       usernameByUserId.get(review.user_id) ?? 'StudySpot User',
     overallRating: review.overall_rating,
@@ -104,4 +107,60 @@ export async function getReviewsForLocation(
     createdAt: review.created_at,
     photoUrl: photoUrlByReviewId.get(review.id) ?? null,
   }));
+}
+
+export async function deleteReview(reviewId: string) {
+  const { data: photos, error: photosError } = await supabase
+    .from('review_photos')
+    .select('storage_path')
+    .eq('review_id', reviewId);
+
+  if (photosError) {
+    throw photosError;
+  }
+
+  const storagePaths = (photos ?? [])
+    .map((photo) => photo.storage_path as string)
+    .filter(Boolean);
+
+  if (storagePaths.length > 0) {
+    const { error: storageError } = await supabase.storage
+      .from('review-photos')
+      .remove(storagePaths);
+
+    if (storageError) {
+      throw storageError;
+    }
+  }
+
+  const { error: deleteError } = await supabase
+    .from('reviews')
+    .delete()
+    .eq('id', reviewId);
+
+  if (deleteError) {
+    throw deleteError;
+  }
+}
+
+export async function updateReview(
+  reviewId: string,
+  updates: {
+    overallRating: number;
+    categoryRatings: Record<string, number>;
+    reviewText: string;
+  }
+) {
+  const { error } = await supabase
+    .from('reviews')
+    .update({
+      overall_rating: updates.overallRating,
+      category_ratings: updates.categoryRatings,
+      review_text: updates.reviewText.trim() || null,
+    })
+    .eq('id', reviewId);
+
+  if (error) {
+    throw error;
+  }
 }
