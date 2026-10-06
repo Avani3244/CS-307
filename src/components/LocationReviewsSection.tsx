@@ -129,13 +129,19 @@ export default function LocationReviewsSection({
   return (
     <View>
       <View style={styles.headingRow}>
-        <Text style={[styles.heading, { color: colors.text }]}>
-          Reviews
-        </Text>
+        <View>
+          <Text style={[styles.heading, { color: '#2E2621' }]}>
+            Reviews
+          </Text>
+          <Text style={styles.headingSubtitle}>
+            What students are saying
+          </Text>
+        </View>
 
         <Pressable
           accessibilityRole="button"
           disabled={refreshing}
+          style={styles.refreshButton}
           onPress={() => loadReviews(true)}
         >
           <Text style={styles.refreshText}>
@@ -145,35 +151,39 @@ export default function LocationReviewsSection({
       </View>
 
       {overallAverage !== null && (
-        <View
-          style={[
-            styles.summary,
-            {
-              backgroundColor: colors.backgroundElement,
-              borderColor: colors.textSecondary,
-            },
-          ]}
-        >
-          <Text style={[styles.overallRating, { color: colors.text }]}>
-            ★ {overallAverage.toFixed(1)}
-          </Text>
+        <View style={styles.summary}>
+          <View style={styles.summaryTop}>
+            <View>
+              <Text style={styles.overallRating}>
+                ★ {overallAverage.toFixed(1)}
+              </Text>
 
-          <Text style={[styles.reviewCount, { color: colors.textSecondary }]}>
-            {reviews.length} {reviews.length === 1 ? 'review' : 'reviews'}
-          </Text>
+              <Text style={styles.reviewCount}>
+                Based on {reviews.length}{' '}
+                {reviews.length === 1 ? 'review' : 'reviews'}
+              </Text>
+            </View>
+
+            <View style={styles.scoreBadge}>
+              <Text style={styles.scoreBadgeText}>
+                {overallAverage >= 4
+                  ? 'Highly rated'
+                  : overallAverage >= 3
+                    ? 'Good'
+                    : 'Mixed'}
+              </Text>
+            </View>
+          </View>
 
           {categoryAverages.length > 0 && (
             <View style={styles.categorySummary}>
               {categoryAverages.map(({ category, average }) => (
-                <View
-                  key={category}
-                  style={[
-                    styles.categoryChip,
-                    { backgroundColor: colors.backgroundSelected },
-                  ]}
-                >
-                  <Text style={[styles.categoryText, { color: colors.text }]}>
-                    {formatCategoryName(category)}: {average.toFixed(1)}
+                <View key={category} style={styles.categoryChip}>
+                  <Text style={styles.categoryLabel}>
+                    {formatCategoryName(category)}
+                  </Text>
+                  <Text style={styles.categoryValue}>
+                    {average.toFixed(1)}
                   </Text>
                 </View>
               ))}
@@ -181,6 +191,7 @@ export default function LocationReviewsSection({
           )}
         </View>
       )}
+
 
       <ReviewList reviews={reviews} />
     </View>
@@ -196,10 +207,11 @@ const styles = StyleSheet.create({
 
   statusText: {
     marginTop: 10,
+    color: '#5F4E45',
   },
 
   error: {
-    color: '#C62828',
+    color: '#7A302F',
     fontSize: 14,
     textAlign: 'center',
   },
@@ -208,67 +220,131 @@ const styles = StyleSheet.create({
     marginTop: 12,
     minHeight: 44,
     paddingHorizontal: 18,
-    borderRadius: 12,
-    backgroundColor: '#208AEF',
+    borderRadius: 14,
+    backgroundColor: '#765F53',
     justifyContent: 'center',
   },
 
   retryText: {
-    color: '#ffffff',
+    color: '#F6EEE9',
     fontWeight: '700',
   },
 
   headingRow: {
-    marginHorizontal: 14,
-    marginTop: 16,
-    marginBottom: 8,
+    marginHorizontal: 16,
+    marginTop: 22,
+    marginBottom: 14,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
 
   heading: {
-    fontSize: 22,
-    fontWeight: '700',
+    fontSize: 27,
+    fontWeight: '800',
+  },
+
+  headingSubtitle: {
+    marginTop: 3,
+    fontSize: 13,
+    color: '#5F4E45',
+  },
+
+  refreshButton: {
+    paddingHorizontal: 13,
+    paddingVertical: 8,
+    borderRadius: 16,
+    backgroundColor: '#C7B0A2',
+    borderWidth: 1,
+    borderColor: '#9B8173',
   },
 
   refreshText: {
-    color: '#208AEF',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-
-  summary: {
-    marginHorizontal: 14,
-    marginBottom: 8,
-    padding: 16,
-    borderRadius: 14,
-    borderWidth: 1,
-  },
-
-  overallRating: {
-    fontSize: 24,
+    color: '#493A32',
+    fontSize: 12,
     fontWeight: '700',
   },
 
+  summary: {
+    marginHorizontal: 16,
+    marginBottom: 20,
+    padding: 19,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: '#7B6559',
+    backgroundColor: '#B19989',
+
+    shadowColor: '#4A3930',
+    shadowOffset: {
+      width: 0,
+      height: 3,
+    },
+    shadowOpacity: 0.18,
+    shadowRadius: 7,
+
+    elevation: 4,
+  },
+
+  summaryTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 12,
+  },
+
+  overallRating: {
+    fontSize: 32,
+    fontWeight: '800',
+    color: '#2B211C',
+  },
+
   reviewCount: {
-    marginTop: 3,
+    marginTop: 4,
+    fontSize: 13,
+    color: '#5F4E45',
+  },
+
+  scoreBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 16,
+    backgroundColor: '#D2BFB4',
+    borderWidth: 1,
+    borderColor: '#9B8173',
+  },
+
+  scoreBadgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#493A32',
   },
 
   categorySummary: {
-    marginTop: 12,
+    marginTop: 20,
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 6,
+    gap: 9,
   },
 
   categoryChip: {
-    paddingHorizontal: 9,
-    paddingVertical: 5,
-    borderRadius: 12,
+    width: '47%',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 16,
+    backgroundColor: '#C7B0A2',
+    borderWidth: 1,
+    borderColor: '#A18778',
   },
 
-  categoryText: {
-    fontSize: 12,
+  categoryLabel: {
+    fontSize: 11,
+    color: '#5F4E45',
+  },
+
+  categoryValue: {
+    marginTop: 3,
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#2B211C',
   },
 });
