@@ -1,4 +1,6 @@
-import { useEffect, useState } from 'react';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import type { ComponentProps } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   Image,
@@ -8,6 +10,9 @@ import {
   TextInput,
   View,
 } from 'react-native';
+
+type IconName =
+  ComponentProps<typeof MaterialCommunityIcons>['name'];
 
 export interface ReviewCardData {
   id: string;
@@ -29,19 +34,125 @@ interface ReviewUpdates {
 interface Props {
   review: ReviewCardData;
   isOwnReview?: boolean;
-  onDeleteReview?: (reviewId: string) => Promise<void>;
+  onDeleteReview?: (
+    reviewId: string
+  ) => Promise<void>;
   onEditReview?: (
     reviewId: string,
     updates: ReviewUpdates
   ) => Promise<void>;
 }
 
+const COLORS = {
+  card: '#FFF9F2',
+  cardSoft: '#FAEFE4',
+  text: '#21160F',
+  muted: '#9A816B',
+  icon: '#A3876D',
+  gold: '#C98A38',
+  goldDark: '#A96F2D',
+  goldSoft: '#F4DFC3',
+  border: '#E2CCB8',
+  divider: '#EAD7C6',
+  white: '#FFFFFF',
+  delete: '#A22B25',
+  deleteBackground: '#F9DDD7',
+  deleteBorder: '#DF7B70',
+};
+
 const ratingOptions = [1, 2, 3, 4, 5];
 
+const CATEGORY_ORDER = [
+  'food',
+  'wifi',
+  'outlets',
+  'seating',
+  'quietness',
+];
+
+const CATEGORY_META: Record<
+  string,
+  { label: string; icon: IconName }
+> = {
+  food: {
+    label: 'Food',
+    icon: 'silverware-fork-knife',
+  },
+  wifi: {
+    label: 'Wi-Fi',
+    icon: 'wifi',
+  },
+  outlets: {
+    label: 'Outlets',
+    icon: 'power-plug',
+  },
+  seating: {
+    label: 'Seating',
+    icon: 'seat',
+  },
+  quietness: {
+    label: 'Quietness',
+    icon: 'volume-low',
+  },
+};
+
+function normalizeCategoryKey(name: string) {
+  const normalized = name
+    .toLowerCase()
+    .replace(/[\s_-]+/g, '');
+
+  if (
+    normalized === 'food' ||
+    normalized === 'foodaccess'
+  ) {
+    return 'food';
+  }
+
+  if (normalized === 'wifi') {
+    return 'wifi';
+  }
+
+  if (normalized === 'outlets') {
+    return 'outlets';
+  }
+
+  if (normalized === 'seating') {
+    return 'seating';
+  }
+
+  if (normalized === 'quietness') {
+    return 'quietness';
+  }
+
+  return name.toLowerCase();
+}
+
 function formatCategoryName(name: string) {
+  const normalized =
+    normalizeCategoryKey(name);
+
+  if (CATEGORY_META[normalized]) {
+    return CATEGORY_META[normalized].label;
+  }
+
   return name
     .replace(/_/g, ' ')
-    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+    .replace(
+      /\b\w/g,
+      (letter) => letter.toUpperCase()
+    );
+}
+
+function getCategoryIcon(
+  name: string
+): IconName {
+  const normalized =
+    normalizeCategoryKey(name);
+
+  return (
+    CATEGORY_META[normalized]?.icon ??
+    'star-outline'
+  );
 }
 
 export default function ReviewCard({
@@ -50,29 +161,83 @@ export default function ReviewCard({
   onDeleteReview,
   onEditReview,
 }: Props) {
-  const [deleting, setDeleting] = useState(false);
-  const [editing, setEditing] = useState(false);
-  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] =
+    useState(false);
 
-  const [editOverallRating, setEditOverallRating] = useState(
-    review.overallRating
+  const [editing, setEditing] =
+    useState(false);
+
+  const [saving, setSaving] =
+    useState(false);
+
+  const [
+    editOverallRating,
+    setEditOverallRating,
+  ] = useState(review.overallRating);
+
+  const [
+    editCategoryRatings,
+    setEditCategoryRatings,
+  ] = useState<Record<string, number>>(
+    review.categoryRatings ?? {}
   );
 
-  const [editCategoryRatings, setEditCategoryRatings] = useState<
-    Record<string, number>
-  >(review.categoryRatings ?? {});
-
-  const [editReviewText, setEditReviewText] = useState(
-    review.reviewText ?? ''
-  );
+  const [
+    editReviewText,
+    setEditReviewText,
+  ] = useState(review.reviewText ?? '');
 
   useEffect(() => {
     if (!editing) {
-      setEditOverallRating(review.overallRating);
-      setEditCategoryRatings(review.categoryRatings ?? {});
-      setEditReviewText(review.reviewText ?? '');
+      setEditOverallRating(
+        review.overallRating
+      );
+
+      setEditCategoryRatings(
+        review.categoryRatings ?? {}
+      );
+
+      setEditReviewText(
+        review.reviewText ?? ''
+      );
     }
   }, [review, editing]);
+
+  const displayCategories = useMemo(() => {
+    if (!review.categoryRatings) {
+      return [];
+    }
+
+    return Object.entries(
+      review.categoryRatings
+    )
+      .map(([name, rating]) => ({
+        name,
+        rating,
+        normalized:
+          normalizeCategoryKey(name),
+      }))
+      .sort((a, b) => {
+        const aIndex =
+          CATEGORY_ORDER.indexOf(
+            a.normalized
+          );
+
+        const bIndex =
+          CATEGORY_ORDER.indexOf(
+            b.normalized
+          );
+
+        return (
+          (aIndex === -1
+            ? 999
+            : aIndex) -
+          (bIndex === -1
+            ? 999
+            : bIndex)
+        );
+      });
+  }, [review.categoryRatings]);
 
   const handleDeletePress = () => {
     Alert.alert(
@@ -86,14 +251,21 @@ export default function ReviewCard({
         {
           text: 'Delete',
           style: 'destructive',
+
           onPress: async () => {
-            if (!onDeleteReview || deleting) {
+            if (
+              !onDeleteReview ||
+              deleting
+            ) {
               return;
             }
 
             try {
               setDeleting(true);
-              await onDeleteReview(review.id);
+
+              await onDeleteReview(
+                review.id
+              );
             } finally {
               setDeleting(false);
             }
@@ -104,16 +276,34 @@ export default function ReviewCard({
   };
 
   const handleEditPress = () => {
-    setEditOverallRating(review.overallRating);
-    setEditCategoryRatings(review.categoryRatings ?? {});
-    setEditReviewText(review.reviewText ?? '');
+    setEditOverallRating(
+      review.overallRating
+    );
+
+    setEditCategoryRatings(
+      review.categoryRatings ?? {}
+    );
+
+    setEditReviewText(
+      review.reviewText ?? ''
+    );
+
     setEditing(true);
   };
 
   const handleCancelEdit = () => {
-    setEditOverallRating(review.overallRating);
-    setEditCategoryRatings(review.categoryRatings ?? {});
-    setEditReviewText(review.reviewText ?? '');
+    setEditOverallRating(
+      review.overallRating
+    );
+
+    setEditCategoryRatings(
+      review.categoryRatings ?? {}
+    );
+
+    setEditReviewText(
+      review.reviewText ?? ''
+    );
+
     setEditing(false);
   };
 
@@ -121,10 +311,12 @@ export default function ReviewCard({
     category: string,
     rating: number
   ) => {
-    setEditCategoryRatings((current) => ({
-      ...current,
-      [category]: rating,
-    }));
+    setEditCategoryRatings(
+      (current) => ({
+        ...current,
+        [category]: rating,
+      })
+    );
   };
 
   const handleSaveEdit = async () => {
@@ -136,8 +328,10 @@ export default function ReviewCard({
       setSaving(true);
 
       await onEditReview(review.id, {
-        overallRating: editOverallRating,
-        categoryRatings: editCategoryRatings,
+        overallRating:
+          editOverallRating,
+        categoryRatings:
+          editCategoryRatings,
         reviewText: editReviewText,
       });
 
@@ -155,6 +349,14 @@ export default function ReviewCard({
   return (
     <View style={styles.card}>
       <View style={styles.header}>
+        <View style={styles.avatar}>
+          <MaterialCommunityIcons
+            name="account"
+            size={34}
+            color={COLORS.icon}
+          />
+        </View>
+
         <View style={styles.reviewerInfo}>
           <View style={styles.nameRow}>
             <Text
@@ -166,8 +368,16 @@ export default function ReviewCard({
             </Text>
 
             {isOwnReview && (
-              <View style={styles.yourReviewBadge}>
-                <Text style={styles.yourReviewText}>
+              <View
+                style={
+                  styles.yourReviewBadge
+                }
+              >
+                <Text
+                  style={
+                    styles.yourReviewText
+                  }
+                >
                   Your review
                 </Text>
               </View>
@@ -175,14 +385,24 @@ export default function ReviewCard({
           </View>
 
           <Text style={styles.date}>
-            {new Date(review.createdAt).toLocaleDateString()}
+            {new Date(
+              review.createdAt
+            ).toLocaleDateString()}
           </Text>
         </View>
 
         {!editing && (
           <View style={styles.ratingBadge}>
+            <MaterialCommunityIcons
+              name="star"
+              size={22}
+              color={COLORS.gold}
+            />
+
             <Text style={styles.ratingText}>
-              ★ {review.overallRating.toFixed(1)}
+              {review.overallRating.toFixed(
+                1
+              )}
             </Text>
           </View>
         )}
@@ -190,75 +410,146 @@ export default function ReviewCard({
 
       {editing ? (
         <View style={styles.editSection}>
-          <Text style={styles.editHeading}>Edit your review</Text>
+          <View
+            style={styles.editTitleRow}
+          >
+            <MaterialCommunityIcons
+              name="pencil-outline"
+              size={20}
+              color={COLORS.goldDark}
+            />
 
-          <Text style={styles.editLabel}>Overall rating</Text>
-
-          <View style={styles.ratingSelector}>
-            {ratingOptions.map((rating) => (
-              <Pressable
-                key={rating}
-                accessibilityRole="button"
-                onPress={() => setEditOverallRating(rating)}
-                style={[
-                  styles.ratingOption,
-                  editOverallRating === rating &&
-                    styles.ratingOptionSelected,
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.ratingOptionText,
-                    editOverallRating === rating &&
-                      styles.ratingOptionTextSelected,
-                  ]}
-                >
-                  {rating}
-                </Text>
-              </Pressable>
-            ))}
+            <Text
+              style={styles.editHeading}
+            >
+              Edit your review
+            </Text>
           </View>
 
-          {Object.keys(editCategoryRatings).length > 0 && (
-            <View style={styles.editCategories}>
-              {Object.entries(editCategoryRatings).map(
-                ([category, selectedRating]) => (
+          <Text style={styles.editLabel}>
+            Overall rating
+          </Text>
+
+          <View
+            style={styles.ratingSelector}
+          >
+            {ratingOptions.map(
+              (rating) => (
+                <Pressable
+                  key={rating}
+                  accessibilityRole="button"
+                  onPress={() =>
+                    setEditOverallRating(
+                      rating
+                    )
+                  }
+                  style={[
+                    styles.ratingOption,
+                    editOverallRating ===
+                      rating &&
+                      styles.ratingOptionSelected,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.ratingOptionText,
+                      editOverallRating ===
+                        rating &&
+                        styles.ratingOptionTextSelected,
+                    ]}
+                  >
+                    {rating}
+                  </Text>
+                </Pressable>
+              )
+            )}
+          </View>
+
+          {Object.keys(
+            editCategoryRatings
+          ).length > 0 && (
+            <View
+              style={
+                styles.editCategories
+              }
+            >
+              {Object.entries(
+                editCategoryRatings
+              ).map(
+                ([
+                  category,
+                  selectedRating,
+                ]) => (
                   <View
                     key={category}
-                    style={styles.editCategoryBlock}
+                    style={
+                      styles.editCategoryBlock
+                    }
                   >
-                    <Text style={styles.editLabel}>
-                      {formatCategoryName(category)}
-                    </Text>
+                    <View
+                      style={
+                        styles.editCategoryLabelRow
+                      }
+                    >
+                      <MaterialCommunityIcons
+                        name={getCategoryIcon(
+                          category
+                        )}
+                        size={18}
+                        color={
+                          COLORS.icon
+                        }
+                      />
 
-                    <View style={styles.ratingSelector}>
-                      {ratingOptions.map((rating) => (
-                        <Pressable
-                          key={rating}
-                          accessibilityRole="button"
-                          onPress={() =>
-                            handleCategoryRatingChange(
-                              category,
+                      <Text
+                        style={
+                          styles.editLabel
+                        }
+                      >
+                        {formatCategoryName(
+                          category
+                        )}
+                      </Text>
+                    </View>
+
+                    <View
+                      style={
+                        styles.ratingSelector
+                      }
+                    >
+                      {ratingOptions.map(
+                        (rating) => (
+                          <Pressable
+                            key={
                               rating
-                            )
-                          }
-                          style={[
-                            styles.smallRatingOption,
-                            selectedRating === rating &&
-                              styles.ratingOptionSelected,
-                          ]}
-                        >
-                          <Text
+                            }
+                            accessibilityRole="button"
+                            onPress={() =>
+                              handleCategoryRatingChange(
+                                category,
+                                rating
+                              )
+                            }
                             style={[
-                              styles.ratingOptionText,
-                              selectedRating === rating &&
-                                styles.ratingOptionTextSelected,
+                              styles.smallRatingOption,
+                              selectedRating ===
+                                rating &&
+                                styles.ratingOptionSelected,
                             ]}
                           >
-                            {rating}
-                          </Text>
-                        </Pressable>
-                      ))}
+                            <Text
+                              style={[
+                                styles.ratingOptionText,
+                                selectedRating ===
+                                  rating &&
+                                  styles.ratingOptionTextSelected,
+                              ]}
+                            >
+                              {rating}
+                            </Text>
+                          </Pressable>
+                        )
+                      )}
                     </View>
                   </View>
                 )
@@ -266,36 +557,61 @@ export default function ReviewCard({
             </View>
           )}
 
-          <Text style={styles.editLabel}>Review</Text>
+          <Text style={styles.editLabel}>
+            Review
+          </Text>
 
           <TextInput
             value={editReviewText}
-            onChangeText={setEditReviewText}
+            onChangeText={
+              setEditReviewText
+            }
             multiline
             maxLength={1000}
             placeholder="Write your review..."
-            placeholderTextColor="#725F54"
+            placeholderTextColor="#AF9B89"
             style={styles.reviewInput}
           />
 
-          <Text style={styles.characterCount}>
+          <Text
+            style={styles.characterCount}
+          >
             {editReviewText.length}/1000
           </Text>
 
           {review.photoUrl && (
-            <Text style={styles.photoNote}>
-              Your existing photo will stay attached.
-            </Text>
+            <View style={styles.photoNote}>
+              <MaterialCommunityIcons
+                name="image-outline"
+                size={16}
+                color={COLORS.muted}
+              />
+
+              <Text
+                style={
+                  styles.photoNoteText
+                }
+              >
+                Your existing photo will
+                stay attached.
+              </Text>
+            </View>
           )}
 
-          <View style={styles.editActions}>
+          <View
+            style={styles.editActions}
+          >
             <Pressable
               accessibilityRole="button"
               disabled={saving}
               onPress={handleCancelEdit}
               style={styles.cancelButton}
             >
-              <Text style={styles.cancelText}>Cancel</Text>
+              <Text
+                style={styles.cancelText}
+              >
+                Cancel
+              </Text>
             </Pressable>
 
             <Pressable
@@ -304,48 +620,97 @@ export default function ReviewCard({
               onPress={handleSaveEdit}
               style={[
                 styles.saveButton,
-                saving && styles.disabledButton,
+                saving &&
+                  styles.disabledButton,
               ]}
             >
-              <Text style={styles.saveText}>
-                {saving ? 'Saving...' : 'Save Changes'}
+              <MaterialCommunityIcons
+                name="check"
+                size={18}
+                color={COLORS.white}
+              />
+
+              <Text
+                style={styles.saveText}
+              >
+                {saving
+                  ? 'Saving...'
+                  : 'Save Changes'}
               </Text>
             </Pressable>
           </View>
         </View>
       ) : (
         <>
-          {review.categoryRatings &&
-            Object.entries(review.categoryRatings).length > 0 && (
-              <View style={styles.categories}>
-                {Object.entries(review.categoryRatings).map(
-                  ([name, rating]) => (
-                    <View key={name} style={styles.categoryChip}>
-                      <Text style={styles.categoryName}>
-                        {formatCategoryName(name)}
-                      </Text>
+          {displayCategories.length >
+            0 && (
+            <View
+              style={styles.categories}
+            >
+              {displayCategories.map(
+                ({
+                  name,
+                  rating,
+                }) => (
+                  <View
+                    key={name}
+                    style={
+                      styles.categoryChip
+                    }
+                  >
+                    <MaterialCommunityIcons
+                      name={getCategoryIcon(
+                        name
+                      )}
+                      size={18}
+                      color={COLORS.icon}
+                    />
 
-                      <Text style={styles.categoryRating}>
-                        {rating}/5
-                      </Text>
-                    </View>
-                  )
-                )}
-              </View>
-            )}
+                    <Text
+                      style={
+                        styles.categoryName
+                      }
+                    >
+                      {formatCategoryName(
+                        name
+                      )}
+                    </Text>
+
+                    <Text
+                      style={
+                        styles.categoryRating
+                      }
+                    >
+                      {rating}/5
+                    </Text>
+                  </View>
+                )
+              )}
+            </View>
+          )}
 
           {!!review.reviewText && (
-            <View style={styles.reviewBody}>
-              <Text style={styles.reviewText}>
+            <View
+              style={styles.reviewBody}
+            >
+              <Text
+                style={styles.reviewText}
+              >
                 {review.reviewText}
               </Text>
             </View>
           )}
 
           {!!review.photoUrl && (
-            <View style={styles.photoContainer}>
+            <View
+              style={
+                styles.photoContainer
+              }
+            >
               <Image
-                source={{ uri: review.photoUrl }}
+                source={{
+                  uri: review.photoUrl,
+                }}
                 style={styles.photo}
                 resizeMode="cover"
               />
@@ -353,14 +718,32 @@ export default function ReviewCard({
           )}
 
           {isOwnReview && (
-            <View style={styles.ownerActions}>
+            <View
+              style={styles.ownerActions}
+            >
               {onEditReview && (
                 <Pressable
                   accessibilityRole="button"
-                  onPress={handleEditPress}
-                  style={styles.editButton}
+                  onPress={
+                    handleEditPress
+                  }
+                  style={({ pressed }) => [
+                    styles.editButton,
+                    pressed &&
+                      styles.pressedButton,
+                  ]}
                 >
-                  <Text style={styles.editButtonText}>
+                  <MaterialCommunityIcons
+                    name="pencil-outline"
+                    size={18}
+                    color={COLORS.text}
+                  />
+
+                  <Text
+                    style={
+                      styles.editButtonText
+                    }
+                  >
                     Edit
                   </Text>
                 </Pressable>
@@ -370,14 +753,32 @@ export default function ReviewCard({
                 <Pressable
                   accessibilityRole="button"
                   disabled={deleting}
-                  onPress={handleDeletePress}
-                  style={[
+                  onPress={
+                    handleDeletePress
+                  }
+                  style={({ pressed }) => [
                     styles.deleteButton,
-                    deleting && styles.disabledButton,
+                    deleting &&
+                      styles.disabledButton,
+                    pressed &&
+                      !deleting &&
+                      styles.pressedButton,
                   ]}
                 >
-                  <Text style={styles.deleteText}>
-                    {deleting ? 'Deleting...' : 'Delete'}
+                  <MaterialCommunityIcons
+                    name="trash-can-outline"
+                    size={18}
+                    color={COLORS.delete}
+                  />
+
+                  <Text
+                    style={
+                      styles.deleteText
+                    }
+                  >
+                    {deleting
+                      ? 'Deleting...'
+                      : 'Delete'}
                   </Text>
                 </Pressable>
               )}
@@ -393,25 +794,39 @@ const styles = StyleSheet.create({
   card: {
     marginHorizontal: 16,
     marginBottom: 16,
-    padding: 18,
-    borderRadius: 20,
+    padding: 17,
+
+    borderRadius: 24,
     borderWidth: 1,
-    borderColor: '#7B6559',
-    backgroundColor: '#B69B8C',
-    shadowColor: '#4A3930',
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.card,
+
+    shadowColor: '#5B3D28',
     shadowOffset: {
       width: 0,
-      height: 3,
+      height: 4,
     },
-    shadowOpacity: 0.18,
-    shadowRadius: 7,
-    elevation: 4,
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    elevation: 3,
   },
 
   header: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 12,
+    alignItems: 'center',
+    gap: 11,
+  },
+
+  avatar: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+
+    backgroundColor: '#EAD4BC',
+
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
   },
 
   reviewerInfo: {
@@ -428,96 +843,103 @@ const styles = StyleSheet.create({
 
   reviewer: {
     flexShrink: 1,
+    color: COLORS.text,
     fontSize: 16,
-    fontWeight: '700',
     lineHeight: 21,
-    color: '#2B211C',
+    fontWeight: '800',
   },
 
   yourReviewBadge: {
     flexShrink: 0,
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    borderRadius: 10,
-    backgroundColor: '#C7B0A2',
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: 13,
+    backgroundColor: COLORS.goldSoft,
   },
 
   yourReviewText: {
+    color: '#6D431C',
     fontSize: 10,
-    fontWeight: '700',
-    color: '#493A32',
+    fontWeight: '800',
   },
 
   date: {
-    marginTop: 4,
+    marginTop: 3,
+    color: COLORS.muted,
     fontSize: 12,
-    color: '#5F4E45',
   },
 
   ratingBadge: {
     flexShrink: 0,
+
     paddingHorizontal: 12,
     paddingVertical: 8,
+
     borderRadius: 18,
-    backgroundColor: '#D2BFB4',
     borderWidth: 1,
-    borderColor: '#9B8173',
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.cardSoft,
+
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
   },
 
   ratingText: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: '#2B211C',
+    color: COLORS.text,
+    fontSize: 16,
+    fontWeight: '900',
   },
 
   categories: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
+    gap: 7,
     marginTop: 16,
   },
 
   categoryChip: {
-    minWidth: 88,
-    paddingHorizontal: 11,
-    paddingVertical: 8,
-    borderRadius: 14,
-    backgroundColor: '#C7B0A2',
-    borderWidth: 1,
-    borderColor: '#A18778',
+    minHeight: 38,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+
+    borderRadius: 16,
+    backgroundColor: COLORS.cardSoft,
+
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
 
   categoryName: {
-    fontSize: 11,
-    color: '#5F4E45',
+    color: COLORS.text,
+    fontSize: 12,
   },
 
   categoryRating: {
-    marginTop: 2,
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#2B211C',
+    color: COLORS.text,
+    fontSize: 12,
+    fontWeight: '800',
   },
 
   reviewBody: {
     marginTop: 16,
-    paddingTop: 15,
-    borderTopWidth: 1,
-    borderTopColor: '#92796B',
   },
 
   reviewText: {
+    color: COLORS.text,
     fontSize: 15,
     lineHeight: 22,
-    color: '#2B211C',
   },
 
   photoContainer: {
-    marginTop: 16,
+    marginTop: 14,
+
     overflow: 'hidden',
-    borderRadius: 16,
+    borderRadius: 17,
+
     borderWidth: 1,
-    borderColor: '#92796B',
+    borderColor: COLORS.border,
   },
 
   photo: {
@@ -528,84 +950,116 @@ const styles = StyleSheet.create({
   ownerActions: {
     marginTop: 16,
     paddingTop: 14,
+
     borderTopWidth: 1,
-    borderTopColor: '#92796B',
+    borderTopColor: COLORS.divider,
+
     flexDirection: 'row',
     justifyContent: 'flex-end',
-    gap: 10,
+    gap: 9,
   },
 
   editButton: {
-    minHeight: 38,
-    paddingHorizontal: 18,
+    minHeight: 42,
+    paddingHorizontal: 16,
+
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#735E52',
-    backgroundColor: '#D2BFB4',
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.card,
+
+    flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'center',
+    gap: 6,
   },
 
   editButtonText: {
-    color: '#493A32',
+    color: COLORS.text,
     fontSize: 13,
-    fontWeight: '700',
+    fontWeight: '800',
   },
 
   deleteButton: {
-    minHeight: 38,
+    minHeight: 42,
     paddingHorizontal: 16,
+
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#7A403B',
-    backgroundColor: '#C89F98',
+    borderColor: COLORS.deleteBorder,
+    backgroundColor: COLORS.deleteBackground,
+
+    flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'center',
+    gap: 6,
   },
 
   deleteText: {
-    color: '#572D29',
+    color: COLORS.delete,
     fontSize: 13,
-    fontWeight: '700',
+    fontWeight: '800',
   },
 
   disabledButton: {
-    opacity: 0.55,
+    opacity: 0.5,
+  },
+
+  pressedButton: {
+    opacity: 0.72,
   },
 
   editSection: {
     marginTop: 18,
     paddingTop: 16,
+
     borderTopWidth: 1,
-    borderTopColor: '#92796B',
+    borderTopColor: COLORS.divider,
+  },
+
+  editTitleRow: {
+    marginBottom: 17,
+
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
   },
 
   editHeading: {
-    marginBottom: 16,
+    color: COLORS.text,
     fontSize: 18,
-    fontWeight: '800',
-    color: '#2B211C',
+    fontWeight: '900',
   },
 
   editLabel: {
     marginBottom: 8,
+    color: COLORS.text,
     fontSize: 13,
-    fontWeight: '700',
-    color: '#493A32',
+    fontWeight: '800',
+  },
+
+  editCategoryLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
 
   ratingSelector: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
+    gap: 7,
     marginBottom: 16,
   },
 
   ratingOption: {
     width: 44,
     height: 40,
+
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#947B6D',
-    backgroundColor: '#C7B0A2',
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.cardSoft,
+
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -613,27 +1067,30 @@ const styles = StyleSheet.create({
   smallRatingOption: {
     width: 38,
     height: 36,
+
     borderRadius: 11,
     borderWidth: 1,
-    borderColor: '#947B6D',
-    backgroundColor: '#C7B0A2',
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.cardSoft,
+
     alignItems: 'center',
     justifyContent: 'center',
   },
 
   ratingOptionSelected: {
-    backgroundColor: '#765F53',
-    borderColor: '#5F4B41',
+    borderColor: COLORS.goldDark,
+    backgroundColor: COLORS.gold,
   },
 
   ratingOptionText: {
+    color: COLORS.text,
     fontSize: 14,
     fontWeight: '700',
-    color: '#493A32',
   },
 
   ratingOptionTextSelected: {
-    color: '#F6EEE9',
+    color: COLORS.white,
+    fontWeight: '900',
   },
 
   editCategories: {
@@ -647,11 +1104,13 @@ const styles = StyleSheet.create({
   reviewInput: {
     minHeight: 110,
     padding: 12,
-    borderRadius: 14,
+
+    borderRadius: 15,
     borderWidth: 1,
-    borderColor: '#947B6D',
-    backgroundColor: '#D2BFB4',
-    color: '#2B211C',
+    borderColor: COLORS.border,
+    backgroundColor: '#FFFDF9',
+
+    color: COLORS.text,
     fontSize: 15,
     lineHeight: 21,
     textAlignVertical: 'top',
@@ -659,50 +1118,65 @@ const styles = StyleSheet.create({
 
   characterCount: {
     marginTop: 6,
+    color: COLORS.muted,
     textAlign: 'right',
     fontSize: 11,
-    color: '#5F4E45',
   },
 
   photoNote: {
-    marginTop: 12,
+    marginTop: 10,
+
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+
+  photoNoteText: {
+    color: COLORS.muted,
     fontSize: 12,
-    color: '#5F4E45',
   },
 
   editActions: {
     marginTop: 18,
+
     flexDirection: 'row',
     justifyContent: 'flex-end',
-    gap: 10,
+    gap: 9,
   },
 
   cancelButton: {
-    minHeight: 40,
+    minHeight: 42,
     paddingHorizontal: 16,
+
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#947B6D',
+    borderColor: COLORS.border,
+
     justifyContent: 'center',
   },
 
   cancelText: {
-    color: '#493A32',
+    color: COLORS.text,
     fontSize: 13,
-    fontWeight: '700',
+    fontWeight: '800',
   },
 
   saveButton: {
-    minHeight: 40,
+    minHeight: 42,
     paddingHorizontal: 16,
+
     borderRadius: 14,
-    backgroundColor: '#765F53',
+    backgroundColor: COLORS.goldDark,
+
+    flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'center',
+    gap: 6,
   },
 
   saveText: {
-    color: '#F6EEE9',
+    color: COLORS.white,
     fontSize: 13,
-    fontWeight: '700',
+    fontWeight: '800',
   },
 });
