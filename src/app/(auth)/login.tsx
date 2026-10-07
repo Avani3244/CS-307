@@ -1,17 +1,37 @@
 import { useAuth } from '@/context/AuthContext';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
 import {
-    ActivityIndicator,
-    KeyboardAvoidingView,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+const COLORS = {
+  header: '#211A15',
+  page: '#F1E2D2',
+  card: '#FFF9F2',
+  cardSoft: '#FAEFE4',
+  text: '#21160F',
+  muted: '#9A816B',
+  icon: '#A3876D',
+  gold: '#C98A38',
+  goldDark: '#A96F2D',
+  goldSoft: '#F4DFC3',
+  border: '#E2CCB8',
+  divider: '#EAD7C6',
+  white: '#FFFFFF',
+  delete: '#A22B25',
+  deleteBackground: '#F9DDD7',
+};
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
@@ -23,6 +43,7 @@ export default function LoginScreen() {
 
   const { signIn, resendVerification } = useAuth();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { notice } = useLocalSearchParams<{ notice?: string }>();
 
   const handleResend = async () => {
@@ -65,100 +86,133 @@ export default function LoginScreen() {
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      style={styles.screen}
+      style={[styles.screen, { backgroundColor: COLORS.page }]}
     >
-      <ScrollView contentContainerStyle={styles.scrollContent} bounces={false}>
-        {/* Purdue Accent Top Band */}
-        <View style={styles.topAccentBar} />
-
+      <ScrollView
+        contentContainerStyle={[
+          styles.scrollContent,
+          {
+            paddingTop: Math.max(insets.top + 30, 40),
+            paddingBottom: insets.bottom + 30,
+          },
+        ]}
+        bounces={false}
+      >
         <View style={styles.card}>
-          {/* Logo / Badge */}
-          <View style={styles.badgeContainer}>
-            <View style={styles.badge}>
-              <Text style={styles.badgeText}>P</Text>
+          {/* Logo Crest */}
+          <View style={styles.badgeWrapper}>
+            <View style={styles.badgeOutline}>
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>P</Text>
+              </View>
             </View>
           </View>
 
-          <Text style={styles.title}>StudySpot</Text>
-          <Text style={styles.subtitle}>Purdue University Campus Locations</Text>
+          <Text style={styles.appTitle}>STUDYSPOT</Text>
+          <Text style={styles.headerSubtitle}>Purdue Campus Study Hub</Text>
 
           {notice === 'password-reset' && !errorMessage && !infoMessage ? (
-            <View style={styles.successBox}>
-              <Text style={styles.successText}>Password updated. Sign in with your new password.</Text>
+            <View style={styles.successBanner}>
+              <MaterialCommunityIcons name="check-circle-outline" size={18} color={COLORS.goldDark} />
+              <Text style={styles.successBannerText}>
+                Password updated. Sign in with your new password.
+              </Text>
             </View>
           ) : null}
 
           {infoMessage ? (
-            <View style={styles.successBox}>
-              <Text style={styles.successText}>{infoMessage}</Text>
+            <View style={styles.successBanner}>
+              <MaterialCommunityIcons name="check-circle-outline" size={18} color={COLORS.goldDark} />
+              <Text style={styles.successBannerText}>{infoMessage}</Text>
             </View>
           ) : null}
 
           {errorMessage ? (
-            <View style={styles.errorBox}>
-              <Text style={styles.errorText}>{errorMessage}</Text>
-              {needsVerification ? (
-                <TouchableOpacity onPress={handleResend}>
-                  <Text style={styles.resendText}>Resend verification email</Text>
-                </TouchableOpacity>
-              ) : null}
+            <View style={styles.errorBanner}>
+              <MaterialCommunityIcons name="alert-circle-outline" size={18} color={COLORS.delete} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.errorBannerText}>{errorMessage}</Text>
+                {needsVerification ? (
+                  <Pressable onPress={handleResend} style={styles.resendBtn}>
+                    <Text style={styles.resendBtnText}>Resend verification email</Text>
+                  </Pressable>
+                ) : null}
+              </View>
             </View>
           ) : null}
 
           {/* Email Input */}
           <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>EMAIL</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="e.g. username@purdue.edu"
-              placeholderTextColor="#8C92AC"
-              autoCapitalize="none"
-              keyboardType="email-address"
-              value={email}
-              onChangeText={setEmail}
-            />
+            <Text style={styles.inputLabel}>PURDUE EMAIL</Text>
+            <View style={styles.inputContainer}>
+              <MaterialCommunityIcons name="email-outline" size={18} color={COLORS.icon} style={styles.inputIcon} />
+              <TextInput
+                style={styles.input}
+                placeholder="username@purdue.edu"
+                placeholderTextColor={COLORS.muted}
+                autoCapitalize="none"
+                keyboardType="email-address"
+                value={email}
+                onChangeText={setEmail}
+              />
+            </View>
           </View>
 
           {/* Password Input */}
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>PASSWORD</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="••••••••"
-              placeholderTextColor="#8C92AC"
-              secureTextEntry
-              value={password}
-              onChangeText={setPassword}
-            />
+            <View style={styles.inputContainer}>
+              <MaterialCommunityIcons name="lock-outline" size={18} color={COLORS.icon} style={styles.inputIcon} />
+              <TextInput
+                style={styles.input}
+                placeholder="••••••••"
+                placeholderTextColor={COLORS.muted}
+                secureTextEntry
+                value={password}
+                onChangeText={setPassword}
+              />
+            </View>
           </View>
 
-          {/* Log In Button */}
-          <TouchableOpacity
-            style={[styles.loginButton, submitting && styles.buttonDisabled]}
+          {/* Sign In Button */}
+          <Pressable
+            style={({ pressed }) => [
+              styles.signInButton,
+              pressed && styles.pressed,
+              submitting && styles.buttonDisabled,
+            ]}
             onPress={handleLogin}
             disabled={submitting}
           >
             {submitting ? (
-              <ActivityIndicator color="#000" />
+              <ActivityIndicator color={COLORS.white} size="small" />
             ) : (
-              <Text style={styles.loginButtonText}>Sign In</Text>
+              <Text style={styles.signInButtonText}>Sign In</Text>
             )}
-          </TouchableOpacity>
+          </Pressable>
 
+          {/* Divider */}
           <View style={styles.dividerContainer}>
             <View style={styles.divider} />
             <Text style={styles.dividerText}>BOILER UP</Text>
             <View style={styles.divider} />
           </View>
 
-          {/* Footnotes / Extra links */}
+          {/* Footer Navigation */}
           <View style={styles.footerLinks}>
-            <TouchableOpacity onPress={() => router.push('/forgot-password')}>
+            <Pressable
+              style={({ pressed }) => pressed && styles.pressed}
+              onPress={() => router.push('/(auth)/forgot-password')}
+            >
               <Text style={styles.linkText}>Forgot password?</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => router.push('/register')}>
+            </Pressable>
+
+            <Pressable
+              style={({ pressed }) => pressed && styles.pressed}
+              onPress={() => router.push('/(auth)/register')}
+            >
               <Text style={[styles.linkText, styles.signUpLink]}>Create account</Text>
-            </TouchableOpacity>
+            </Pressable>
           </View>
         </View>
       </ScrollView>
@@ -169,167 +223,187 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: '#121212', // Boilermaker Deep Slate / Dark mode backing
   },
   scrollContent: {
     flexGrow: 1,
     justifyContent: 'center',
-    padding: 24,
-  },
-  topAccentBar: {
-    height: 4,
-    backgroundColor: '#CEB888', // Official Purdue Gold
-    width: '100%',
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
+    alignItems: 'center',
+    paddingHorizontal: 20,
   },
   card: {
-    backgroundColor: '#1E1E1E', // Modern dark charcoal surface
-    borderRadius: 16,
-    padding: 28,
-    borderWidth: 1,
-    borderColor: '#2D2D2D',
-    maxWidth: 440,
     width: '100%',
-    alignSelf: 'center',
-    shadowColor: '#000',
+    maxWidth: 440,
+    backgroundColor: COLORS.card,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    padding: 28,
+    shadowColor: COLORS.header,
     shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.35,
-    shadowRadius: 10,
-    elevation: 8,
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    elevation: 3,
   },
-  badgeContainer: {
+  badgeWrapper: {
     alignItems: 'center',
     marginBottom: 12,
   },
+  badgeOutline: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    borderWidth: 2,
+    borderColor: COLORS.gold,
+    padding: 3,
+    backgroundColor: COLORS.white,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   badge: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#CEB888', // Purdue Gold
+    width: '100%',
+    height: '100%',
+    borderRadius: 30,
+    backgroundColor: COLORS.goldSoft,
     justifyContent: 'center',
     alignItems: 'center',
   },
   badgeText: {
-    color: '#000',
+    color: COLORS.header,
     fontWeight: '900',
-    fontSize: 26,
-    fontFamily: Platform.OS === 'ios' ? 'HelveticaNeue-Bold' : 'sans-serif-black',
+    fontSize: 30,
   },
-  title: {
-    fontSize: 28,
+  appTitle: {
+    fontSize: 13,
     fontWeight: '800',
-    color: '#F4F4F4',
+    letterSpacing: 1.5,
+    color: COLORS.goldDark,
     textAlign: 'center',
-    letterSpacing: 0.5,
   },
-  subtitle: {
-    fontSize: 13,
-    color: '#CEB888', // Gold subtitle text
+  headerSubtitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: COLORS.header,
     textAlign: 'center',
-    marginBottom: 26,
+    marginBottom: 20,
+    marginTop: 2,
+  },
+  errorBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    backgroundColor: COLORS.deleteBackground,
+    borderColor: COLORS.delete,
+    borderWidth: 1,
+    padding: 12,
+    borderRadius: 12,
+    marginBottom: 16,
+  },
+  errorBannerText: {
+    color: COLORS.delete,
+    fontSize: 13,
     fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 1.2,
   },
-  errorBox: {
-    backgroundColor: 'rgba(239, 68, 68, 0.1)',
-    borderLeftWidth: 3,
-    borderLeftColor: '#EF4444',
-    padding: 10,
-    borderRadius: 6,
-    marginBottom: 18,
+  resendBtn: {
+    marginTop: 6,
   },
-  errorText: {
-    color: '#FCA5A5',
-    fontSize: 13,
-    textAlign: 'left',
-  },
-  successBox: {
-    backgroundColor: 'rgba(34, 197, 94, 0.1)',
-    borderLeftWidth: 3,
-    borderLeftColor: '#22C55E',
-    padding: 10,
-    borderRadius: 6,
-    marginBottom: 18,
-  },
-  successText: {
-    color: '#86EFAC',
-    fontSize: 13,
-  },
-  resendText: {
-    color: '#CEB888',
+  resendBtnText: {
+    color: COLORS.goldDark,
     fontSize: 13,
     fontWeight: '700',
-    marginTop: 8,
+  },
+  successBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: COLORS.cardSoft,
+    borderColor: COLORS.gold,
+    borderWidth: 1,
+    padding: 12,
+    borderRadius: 12,
+    marginBottom: 16,
+  },
+  successBannerText: {
+    color: COLORS.goldDark,
+    fontSize: 13,
+    fontWeight: '700',
+    flex: 1,
   },
   inputGroup: {
-    marginBottom: 18,
+    marginBottom: 16,
   },
   inputLabel: {
     fontSize: 11,
-    fontWeight: '700',
-    color: '#CEB888', // Gold labels
-    marginBottom: 6,
+    fontWeight: '800',
     letterSpacing: 0.8,
+    color: COLORS.goldDark,
+    marginBottom: 6,
+  },
+  inputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.cardSoft,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+  },
+  inputIcon: {
+    marginRight: 8,
   },
   input: {
-    backgroundColor: '#121212',
-    borderWidth: 1,
-    borderColor: '#333',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderRadius: 8,
-    fontSize: 15,
-    color: '#FFF',
+    flex: 1,
+    paddingVertical: 12,
+    fontSize: 14,
+    color: COLORS.text,
   },
-  loginButton: {
-    backgroundColor: '#CEB888', // Purdue Gold button
-    paddingVertical: 15,
-    borderRadius: 8,
+  signInButton: {
+    backgroundColor: COLORS.gold,
+    paddingVertical: 13,
+    borderRadius: 12,
     alignItems: 'center',
-    marginTop: 8,
+    marginTop: 6,
   },
-  buttonDisabled: {
-    opacity: 0.5,
-  },
-  loginButtonText: {
-    color: '#121212', // Black bold text on gold
-    fontSize: 16,
+  signInButtonText: {
+    color: COLORS.white,
+    fontSize: 15,
     fontWeight: '800',
     letterSpacing: 0.5,
+  },
+  buttonDisabled: {
+    opacity: 0.6,
+  },
+  pressed: {
+    opacity: 0.8,
   },
   dividerContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginVertical: 22,
+    marginVertical: 20,
   },
   divider: {
     flex: 1,
     height: 1,
-    backgroundColor: '#2E2E2E',
+    backgroundColor: COLORS.divider,
   },
   dividerText: {
-    color: '#666',
-    fontSize: 11,
-    fontWeight: '700',
-    marginHorizontal: 12,
-    letterSpacing: 1,
+    color: COLORS.muted,
+    fontSize: 10,
+    fontWeight: '800',
+    marginHorizontal: 10,
+    letterSpacing: 1.2,
   },
   footerLinks: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingTop: 4,
+    alignItems: 'center',
   },
   linkText: {
-    color: '#A0A0A0',
+    color: COLORS.muted,
     fontSize: 13,
-    fontWeight: '500',
+    fontWeight: '600',
   },
   signUpLink: {
-    color: '#CEB888', // Highlight gold for registration
-    fontWeight: '700',
+    color: COLORS.goldDark,
+    fontWeight: '800',
   },
 });
