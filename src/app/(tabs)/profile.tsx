@@ -1,21 +1,45 @@
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { decode } from 'base64-arraybuffer';
 import * as ImagePicker from 'expo-image-picker';
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
   Image,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
-  TouchableOpacity,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+const COLORS = {
+  header: '#211A15',
+  page: '#F1E2D2',
+  card: '#FFF9F2',
+  cardSoft: '#FAEFE4',
+  text: '#21160F',
+  muted: '#9A816B',
+  icon: '#A3876D',
+  gold: '#C98A38',
+  goldDark: '#A96F2D',
+  goldSoft: '#F4DFC3',
+  border: '#E2CCB8',
+  divider: '#EAD7C6',
+  white: '#FFFFFF',
+  delete: '#A22B25',
+  deleteBackground: '#F9DDD7',
+};
+
+const STUDY_STYLES = ['Quiet / Solo', 'Group Study', 'Coffee Shops', 'Late Night', 'Natural Light'];
 
 export default function ProfileScreen() {
   const { user, signOut } = useAuth();
+  const insets = useSafeAreaInsets();
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -23,33 +47,44 @@ export default function ProfileScreen() {
 
   // Profile data
   const [username, setUsername] = useState('');
+  const [fullName, setFullName] = useState('');
+  const [major, setMajor] = useState('');
+  const [gradYear, setGradYear] = useState('');
   const [bio, setBio] = useState('');
+  const [preferredStyle, setPreferredStyle] = useState('');
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
 
   // Form edit state
   const [editUsername, setEditUsername] = useState('');
+  const [editFullName, setEditFullName] = useState('');
+  const [editMajor, setEditMajor] = useState('');
+  const [editGradYear, setEditGradYear] = useState('');
   const [editBio, setEditBio] = useState('');
-  const [newImageUri, setNewImageUri] = useState<string | null>(null);
+  const [editPreferredStyle, setEditPreferredStyle] = useState('');
+  const [newImageBase64, setNewImageBase64] = useState<string | null>(null);
+  const [previewUri, setPreviewUri] = useState<string | null>(null);
+
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
 
-  // 1. Fetch Profile Data on Load
   useEffect(() => {
-    if (user) {
+    if (user?.id) {
       fetchProfile();
     }
-  }, [user]);
+  }, [user?.id]);
 
   const fetchProfile = async () => {
+    if (!user?.id) return;
+
     try {
       setLoading(true);
       setErrorMessage('');
 
       const { data, error } = await supabase
         .from('profiles')
-        .select('username, bio, avatar_url')
-        .eq('id', user?.id)
-        .single();
+        .select('*')
+        .eq('user_id', user.id)
+        .maybeSingle();
 
       if (error && error.code !== 'PGRST116') {
         throw error;
@@ -57,10 +92,19 @@ export default function ProfileScreen() {
 
       if (data) {
         setUsername(data.username || '');
+        setFullName(data.full_name || '');
+        setMajor(data.major || '');
+        setGradYear(data.grad_year ? String(data.grad_year) : '');
         setBio(data.bio || '');
+        setPreferredStyle(data.preferred_style || '');
         setAvatarUrl(data.avatar_url || null);
+
         setEditUsername(data.username || '');
+        setEditFullName(data.full_name || '');
+        setEditMajor(data.major || '');
+        setEditGradYear(data.grad_year ? String(data.grad_year) : '');
         setEditBio(data.bio || '');
+        setEditPreferredStyle(data.preferred_style || '');
       } else {
         setIsEditing(true);
       }
@@ -71,7 +115,6 @@ export default function ProfileScreen() {
     }
   };
 
-  // 2. Pick an Image from Device
   const pickImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
@@ -80,44 +123,38 @@ export default function ProfileScreen() {
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ['images'],
       allowsEditing: true,
       aspect: [1, 1],
-      quality: 0.8,
+      quality: 0.7,
+      base64: true,
     });
 
-    if (!result.canceled && result.assets[0].uri) {
-      setNewImageUri(result.assets[0].uri);
+    if (!result.canceled && result.assets && result.assets[0]) {
+      setPreviewUri(result.assets[0].uri);
+      if (result.assets[0].base64) {
+        setNewImageBase64(result.assets[0].base64);
+      }
     }
   };
 
-  // 3. Upload Image to Supabase Storage
-  const uploadAvatar = async (uri: string): Promise<string | null> => {
-    try {
-      const response = await fetch(uri);
-      const blob = await response.blob();
-      const fileExt = uri.split('.').pop()?.toLowerCase() || 'jpg';
-      const fileName = `${user?.id}-${Date.now()}.${fileExt}`;
-      const filePath = `avatars/${fileName}`;
+  const uploadAvatarBase64 = async (base64Data: string): Promise<string> => {
+    const fileName = `${user?.id}-${Date.now()}.jpg`;
+    const filePath = `avatars/${fileName}`;
 
-      const { error: uploadError } = await supabase.storage
-        .from('avatars')
-        .upload(filePath, blob, {
-          upsert: true,
-          contentType: blob.type || 'image/jpeg',
-        });
+    const { error: uploadError } = await supabase.storage
+      .from('avatars')
+      .upload(filePath, decode(base64Data), {
+        contentType: 'image/jpeg',
+        upsert: true,
+      });
 
-      if (uploadError) throw uploadError;
+    if (uploadError) throw uploadError;
 
-      const { data } = supabase.storage.from('avatars').getPublicUrl(filePath);
-      return data.publicUrl;
-    } catch (err: any) {
-      console.error('Upload avatar error:', err);
-      throw new Error('Failed to upload profile image.');
-    }
+    const { data } = supabase.storage.from('avatars').getPublicUrl(filePath);
+    return data.publicUrl;
   };
 
-  // 4. Save/Update Profile
   const handleSave = async () => {
     setErrorMessage('');
     setSuccessMessage('');
@@ -139,11 +176,12 @@ export default function ProfileScreen() {
     try {
       setSaving(true);
 
+      // Check unique username excluding current user's profile
       const { data: existingUser, error: checkError } = await supabase
         .from('profiles')
-        .select('id')
+        .select('user_id')
         .eq('username', cleanUsername)
-        .neq('id', user?.id)
+        .neq('user_id', user?.id)
         .maybeSingle();
 
       if (checkError) throw checkError;
@@ -154,27 +192,39 @@ export default function ProfileScreen() {
       }
 
       let finalAvatarUrl = avatarUrl;
-      if (newImageUri) {
-        finalAvatarUrl = await uploadAvatar(newImageUri);
+      if (newImageBase64) {
+        finalAvatarUrl = await uploadAvatarBase64(newImageBase64);
       }
 
       const updates = {
-        id: user?.id,
+        user_id: user?.id,
         username: cleanUsername,
+        full_name: editFullName.trim(),
+        major: editMajor.trim(),
+        grad_year: editGradYear.trim(),
         bio: editBio.trim(),
+        preferred_style: editPreferredStyle,
         avatar_url: finalAvatarUrl,
         updated_at: new Date().toISOString(),
       };
 
-      const { error: saveError } = await supabase.from('profiles').upsert(updates);
+      const { error: saveError } = await supabase
+        .from('profiles')
+        .upsert(updates, { onConflict: 'user_id' });
+
       if (saveError) throw saveError;
 
       setUsername(cleanUsername);
+      setFullName(editFullName.trim());
+      setMajor(editMajor.trim());
+      setGradYear(editGradYear.trim());
       setBio(editBio.trim());
+      setPreferredStyle(editPreferredStyle);
       setAvatarUrl(finalAvatarUrl);
-      setNewImageUri(null);
+      setNewImageBase64(null);
+      setPreviewUri(null);
       setIsEditing(false);
-      setSuccessMessage('Profile updated successfully!');
+      setSuccessMessage('Profile saved successfully!');
     } catch (err: any) {
       setErrorMessage(err.message || 'An error occurred while saving profile.');
     } finally {
@@ -184,90 +234,165 @@ export default function ProfileScreen() {
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#CEB888" />
+      <View style={[styles.loadingContainer, { backgroundColor: COLORS.page }]}>
+        <ActivityIndicator size="large" color={COLORS.gold} />
       </View>
     );
   }
 
-  const currentDisplayPhoto = newImageUri || avatarUrl;
+  const currentDisplayPhoto = previewUri || avatarUrl;
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.scrollContent}>
-      {/* Top Gold Accent Line */}
-      <View style={styles.topAccentBar} />
+    <ScrollView
+      style={[styles.screen, { backgroundColor: COLORS.page }]}
+      contentContainerStyle={[
+        styles.scrollContent,
+        { paddingTop: Math.max(insets.top + 20, 85), paddingBottom: insets.bottom + 40 },
+      ]}
+    >
+      <View style={styles.topHeaderCard}>
+        <View>
+          <Text style={styles.appTitle}>STUDYSPOT PURDUE</Text>
+          <Text style={styles.headerSubtitle}>Account & Preferences</Text>
+        </View>
 
-      {/* Header Bar with Action Button */}
-      <View style={styles.headerRow}>
-        <Text style={styles.screenTitle}>BOILER PROFILE</Text>
-        {!isEditing && (
-          <TouchableOpacity
-            style={styles.editHeaderButton}
+        {!isEditing ? (
+          <Pressable
+            style={({ pressed }) => [styles.editBadgeButton, pressed && styles.pressed]}
             onPress={() => {
               setEditUsername(username);
+              setEditFullName(fullName);
+              setEditMajor(major);
+              setEditGradYear(gradYear);
               setEditBio(bio);
+              setEditPreferredStyle(preferredStyle);
               setErrorMessage('');
               setSuccessMessage('');
               setIsEditing(true);
             }}
           >
-            <Text style={styles.editHeaderButtonText}>Edit</Text>
-          </TouchableOpacity>
-        )}
+            <MaterialCommunityIcons name="pencil-outline" size={16} color={COLORS.header} />
+            <Text style={styles.editBadgeText}>Edit</Text>
+          </Pressable>
+        ) : null}
       </View>
 
       {errorMessage ? (
-        <View style={styles.errorBox}>
-          <Text style={styles.errorText}>{errorMessage}</Text>
+        <View style={styles.errorBanner}>
+          <MaterialCommunityIcons name="alert-circle-outline" size={18} color={COLORS.delete} />
+          <Text style={styles.errorBannerText}>{errorMessage}</Text>
         </View>
       ) : null}
 
       {successMessage ? (
-        <View style={styles.successBox}>
-          <Text style={styles.successText}>{successMessage}</Text>
+        <View style={styles.successBanner}>
+          <MaterialCommunityIcons name="check-circle-outline" size={18} color={COLORS.goldDark} />
+          <Text style={styles.successBannerText}>{successMessage}</Text>
         </View>
       ) : null}
 
-      {/* Main Profile Card */}
-      <View style={styles.card}>
-        <View style={styles.avatarWrapper}>
-          {currentDisplayPhoto ? (
-            <Image source={{ uri: currentDisplayPhoto }} style={styles.avatarImage} />
-          ) : (
-            <View style={styles.avatarPlaceholder}>
-              <Text style={styles.avatarInitial}>
-                {username ? username.charAt(0).toUpperCase() : 'P'}
-              </Text>
-            </View>
-          )}
+      <View style={styles.mainCard}>
+        <View style={styles.avatarSection}>
+          <View style={styles.avatarOutline}>
+            {currentDisplayPhoto ? (
+              <Image source={{ uri: currentDisplayPhoto }} style={styles.avatarImg} />
+            ) : (
+              <View style={styles.avatarFallback}>
+                <Text style={styles.avatarInitial}>
+                  {(fullName ? fullName.charAt(0) : username ? username.charAt(0) : 'P').toUpperCase()}
+                </Text>
+              </View>
+            )}
+          </View>
 
-          {isEditing && (
-            <TouchableOpacity style={styles.changePhotoButton} onPress={pickImage}>
-              <Text style={styles.changePhotoText}>Change Photo</Text>
-            </TouchableOpacity>
-          )}
+          {isEditing ? (
+            <Pressable
+              style={({ pressed }) => [styles.changePhotoBadge, pressed && styles.pressed]}
+              onPress={pickImage}
+            >
+              <MaterialCommunityIcons name="camera" size={16} color={COLORS.header} />
+              <Text style={styles.changePhotoBadgeText}>Upload Photo</Text>
+            </Pressable>
+          ) : null}
         </View>
 
         {isEditing ? (
           <View style={styles.formContainer}>
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>USERNAME</Text>
+            <View style={styles.fieldGroup}>
+              <Text style={styles.fieldLabel}>FULL NAME</Text>
               <TextInput
-                style={styles.input}
-                placeholder="Choose a username"
-                placeholderTextColor="#666"
+                style={styles.textInput}
+                placeholder="e.g. Pete Boilermaker"
+                placeholderTextColor={COLORS.muted}
+                value={editFullName}
+                onChangeText={setEditFullName}
+              />
+            </View>
+
+            <View style={styles.fieldGroup}>
+              <Text style={styles.fieldLabel}>USERNAME</Text>
+              <TextInput
+                style={styles.textInput}
+                placeholder="Choose unique username"
+                placeholderTextColor={COLORS.muted}
                 value={editUsername}
                 onChangeText={setEditUsername}
                 autoCapitalize="none"
               />
             </View>
 
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>BIO</Text>
+            <View style={styles.twoColumnRow}>
+              <View style={[styles.fieldGroup, { flex: 2 }]}>
+                <Text style={styles.fieldLabel}>MAJOR</Text>
+                <TextInput
+                  style={styles.textInput}
+                  placeholder="e.g. Computer Science"
+                  placeholderTextColor={COLORS.muted}
+                  value={editMajor}
+                  onChangeText={setEditMajor}
+                />
+              </View>
+
+              <View style={[styles.fieldGroup, { flex: 1 }]}>
+                <Text style={styles.fieldLabel}>CLASS OF</Text>
+                <TextInput
+                  style={styles.textInput}
+                  placeholder="2027"
+                  placeholderTextColor={COLORS.muted}
+                  value={editGradYear}
+                  onChangeText={setEditGradYear}
+                  keyboardType="numeric"
+                  maxLength={4}
+                />
+              </View>
+            </View>
+
+            <View style={styles.fieldGroup}>
+              <Text style={styles.fieldLabel}>FAVORITE STUDY ENVIRONMENT</Text>
+              <View style={styles.chipWrapper}>
+                {STUDY_STYLES.map((style) => {
+                  const isSelected = editPreferredStyle === style;
+                  return (
+                    <Pressable
+                      key={style}
+                      style={[styles.styleChip, isSelected && styles.styleChipSelected]}
+                      onPress={() => setEditPreferredStyle(isSelected ? '' : style)}
+                    >
+                      <Text style={[styles.styleChipText, isSelected && styles.styleChipTextSelected]}>
+                        {style}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+
+            <View style={styles.fieldGroup}>
+              <Text style={styles.fieldLabel}>ABOUT ME / BIO</Text>
               <TextInput
-                style={[styles.input, styles.bioInput]}
-                placeholder="Tell other Boilermakers about your study habits..."
-                placeholderTextColor="#666"
+                style={[styles.textInput, styles.textArea]}
+                placeholder="Where do you get your best studying done on campus?"
+                placeholderTextColor={COLORS.muted}
                 value={editBio}
                 onChangeText={setEditBio}
                 multiline
@@ -275,53 +400,86 @@ export default function ProfileScreen() {
               />
             </View>
 
-            <View style={styles.editActionRow}>
+            <View style={styles.actionsRow}>
               {username ? (
-                <TouchableOpacity
-                  style={styles.cancelButton}
+                <Pressable
+                  style={({ pressed }) => [styles.cancelBtn, pressed && styles.pressed]}
                   onPress={() => {
                     setIsEditing(false);
-                    setNewImageUri(null);
+                    setPreviewUri(null);
+                    setNewImageBase64(null);
                     setErrorMessage('');
                   }}
                   disabled={saving}
                 >
-                  <Text style={styles.cancelButtonText}>Cancel</Text>
-                </TouchableOpacity>
+                  <Text style={styles.cancelBtnText}>Cancel</Text>
+                </Pressable>
               ) : null}
 
-              <TouchableOpacity
-                style={[styles.saveButton, saving && styles.buttonDisabled]}
+              <Pressable
+                style={({ pressed }) => [styles.saveBtn, pressed && styles.pressed, saving && styles.disabled]}
                 onPress={handleSave}
                 disabled={saving}
               >
                 {saving ? (
-                  <ActivityIndicator color="#000" />
+                  <ActivityIndicator color={COLORS.white} size="small" />
                 ) : (
-                  <Text style={styles.saveButtonText}>Save Profile</Text>
+                  <Text style={styles.saveBtnText}>Save Profile</Text>
                 )}
-              </TouchableOpacity>
+              </Pressable>
             </View>
           </View>
         ) : (
           <View style={styles.displayContainer}>
-            <Text style={styles.displayUsername}>@{username || 'No Username'}</Text>
-            <Text style={styles.displayEmail}>{user?.email}</Text>
+            <Text style={styles.displayFullName}>{fullName || username || 'Boilermaker'}</Text>
+            <Text style={styles.displayUsername}>{'@' + (username || 'set_username')}</Text>
+            <Text style={styles.displayEmail}>{user?.email || ''}</Text>
 
-            <View style={styles.bioContainer}>
-              <Text style={styles.bioHeading}>ABOUT ME</Text>
-              <Text style={styles.displayBio}>
-                {bio ? bio : 'No bio added yet. Tap "Edit" to share where you like to study!'}
+            {major || gradYear ? (
+              <View style={styles.academicBadgeRow}>
+                {major ? (
+                  <View style={styles.infoBadge}>
+                    <MaterialCommunityIcons name="school-outline" size={14} color={COLORS.goldDark} />
+                    <Text style={styles.infoBadgeText}>{major}</Text>
+                  </View>
+                ) : null}
+                {gradYear ? (
+                  <View style={styles.infoBadge}>
+                    <MaterialCommunityIcons name="calendar-outline" size={14} color={COLORS.goldDark} />
+                    <Text style={styles.infoBadgeText}>{"'" + gradYear.slice(-2)}</Text>
+                  </View>
+                ) : null}
+              </View>
+            ) : null}
+
+            {preferredStyle ? (
+              <View style={styles.preferredStyleRow}>
+                <MaterialCommunityIcons name="compass-outline" size={16} color={COLORS.goldDark} />
+                <Text style={styles.preferredStyleLabel}>Prefers: </Text>
+                <Text style={styles.preferredStyleVal}>{preferredStyle}</Text>
+              </View>
+            ) : null}
+
+            <View style={styles.bioCard}>
+              <View style={styles.bioHeadingRow}>
+                <MaterialCommunityIcons name="text-account" size={16} color={COLORS.goldDark} />
+                <Text style={styles.bioHeaderTitle}>ABOUT ME</Text>
+              </View>
+              <Text style={styles.bioBodyText}>
+                {bio ? bio : 'No bio added yet. Tap "Edit" to tell classmates your study routine!'}
               </Text>
             </View>
           </View>
         )}
       </View>
 
-      {/* Logout Action */}
-      <TouchableOpacity style={styles.logoutButton} onPress={signOut}>
-        <Text style={styles.logoutButtonText}>Log Out</Text>
-      </TouchableOpacity>
+      <Pressable
+        style={({ pressed }) => [styles.logoutBtn, pressed && styles.pressed]}
+        onPress={signOut}
+      >
+        <MaterialCommunityIcons name="logout-variant" size={18} color={COLORS.delete} />
+        <Text style={styles.logoutBtnText}>Log Out of Boilermaker Account</Text>
+      </Pressable>
     </ScrollView>
   );
 }
@@ -329,236 +487,347 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: '#121212',
   },
   scrollContent: {
     paddingHorizontal: 20,
-    paddingTop: 96, // Ample clearance beneath floating web navbar
-    paddingBottom: 60,
     alignItems: 'center',
   },
   loadingContainer: {
     flex: 1,
-    backgroundColor: '#121212',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  topAccentBar: {
-    height: 4,
-    backgroundColor: '#CEB888',
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
+  pressed: {
+    opacity: 0.8,
   },
-  headerRow: {
+  disabled: {
+    opacity: 0.6,
+  },
+  topHeaderCard: {
     width: '100%',
-    maxWidth: 480,
+    maxWidth: 500,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 16,
   },
-  screenTitle: {
-    color: '#CEB888',
-    fontSize: 14,
-    fontWeight: '800',
-    letterSpacing: 1.5,
-  },
-  editHeaderButton: {
-    backgroundColor: '#2A2A2A',
-    paddingHorizontal: 16,
-    paddingVertical: 6,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: '#444',
-  },
-  editHeaderButtonText: {
-    color: '#CEB888',
-    fontWeight: '700',
+  appTitle: {
     fontSize: 13,
+    fontWeight: '800',
+    letterSpacing: 1.2,
+    color: COLORS.goldDark,
   },
-  card: {
-    backgroundColor: '#1E1E1E',
-    borderRadius: 14,
+  headerSubtitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: COLORS.header,
+  },
+  editBadgeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: COLORS.cardSoft,
     borderWidth: 1,
-    borderColor: '#2D2D2D',
+    borderColor: COLORS.border,
+    paddingVertical: 7,
+    paddingHorizontal: 14,
+    borderRadius: 20,
+  },
+  editBadgeText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.header,
+  },
+  errorBanner: {
     width: '100%',
-    maxWidth: 480,
+    maxWidth: 500,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: COLORS.deleteBackground,
+    borderColor: COLORS.delete,
+    borderWidth: 1,
+    padding: 12,
+    borderRadius: 12,
+    marginBottom: 14,
+  },
+  errorBannerText: {
+    color: COLORS.delete,
+    fontSize: 13,
+    fontWeight: '600',
+    flex: 1,
+  },
+  successBanner: {
+    width: '100%',
+    maxWidth: 500,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: COLORS.cardSoft,
+    borderColor: COLORS.gold,
+    borderWidth: 1,
+    padding: 12,
+    borderRadius: 12,
+    marginBottom: 14,
+  },
+  successBannerText: {
+    color: COLORS.goldDark,
+    fontSize: 13,
+    fontWeight: '700',
+    flex: 1,
+  },
+  mainCard: {
+    width: '100%',
+    maxWidth: 500,
+    backgroundColor: COLORS.card,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: COLORS.border,
     padding: 24,
     alignItems: 'center',
+    shadowColor: COLORS.header,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    elevation: 2,
     marginBottom: 20,
   },
-  avatarWrapper: {
+  avatarSection: {
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 18,
   },
-  avatarImage: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    borderWidth: 2,
-    borderColor: '#CEB888',
+  avatarOutline: {
+    width: 106,
+    height: 106,
+    borderRadius: 53,
+    borderWidth: 3,
+    borderColor: COLORS.gold,
+    padding: 3,
+    backgroundColor: COLORS.white,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  avatarPlaceholder: {
-    width: 100,
-    height: 100,
+  avatarImg: {
+    width: '100%',
+    height: '100%',
     borderRadius: 50,
-    backgroundColor: '#2A2A2A',
-    borderWidth: 2,
-    borderColor: '#CEB888',
+  },
+  avatarFallback: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 50,
+    backgroundColor: COLORS.cardSoft,
     justifyContent: 'center',
     alignItems: 'center',
   },
   avatarInitial: {
-    color: '#CEB888',
-    fontSize: 38,
+    fontSize: 40,
     fontWeight: '900',
+    color: COLORS.goldDark,
   },
-  changePhotoButton: {
+  changePhotoBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
     marginTop: 10,
+    backgroundColor: COLORS.goldSoft,
+    borderWidth: 1,
+    borderColor: COLORS.gold,
+    paddingVertical: 6,
     paddingHorizontal: 12,
-    paddingVertical: 4,
+    borderRadius: 16,
   },
-  changePhotoText: {
-    color: '#CEB888',
-    fontSize: 13,
-    fontWeight: '600',
+  changePhotoBadgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.header,
   },
   displayContainer: {
     width: '100%',
     alignItems: 'center',
   },
-  displayUsername: {
-    color: '#F4F4F4',
+  displayFullName: {
     fontSize: 22,
     fontWeight: '800',
-    marginBottom: 4,
+    color: COLORS.text,
+    marginBottom: 2,
+  },
+  displayUsername: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.goldDark,
+    marginBottom: 2,
   },
   displayEmail: {
-    color: '#8C92AC',
     fontSize: 13,
-    marginBottom: 20,
+    color: COLORS.muted,
+    marginBottom: 16,
   },
-  bioContainer: {
-    width: '100%',
-    backgroundColor: '#161616',
-    borderRadius: 8,
-    padding: 14,
+  academicBadgeRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    justifyContent: 'center',
+    marginBottom: 18,
+  },
+  infoBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: COLORS.cardSoft,
+    borderColor: COLORS.divider,
     borderWidth: 1,
-    borderColor: '#262626',
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: 12,
   },
-  bioHeading: {
-    color: '#CEB888',
-    fontSize: 11,
+  infoBadgeText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.text,
+  },
+  preferredStyleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 16,
+  },
+  preferredStyleLabel: {
+    fontSize: 13,
+    color: COLORS.muted,
+    fontWeight: '600',
+  },
+  preferredStyleVal: {
+    fontSize: 13,
     fontWeight: '700',
-    letterSpacing: 1,
+    color: COLORS.text,
+  },
+  bioCard: {
+    width: '100%',
+    backgroundColor: COLORS.cardSoft,
+    borderWidth: 1,
+    borderColor: COLORS.divider,
+    borderRadius: 14,
+    padding: 14,
+  },
+  bioHeadingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
     marginBottom: 6,
   },
-  displayBio: {
-    color: '#D1D5DB',
+  bioHeaderTitle: {
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.8,
+    color: COLORS.goldDark,
+  },
+  bioBodyText: {
     fontSize: 14,
+    color: COLORS.text,
     lineHeight: 20,
   },
   formContainer: {
     width: '100%',
   },
-  inputGroup: {
-    marginBottom: 16,
+  fieldGroup: {
+    marginBottom: 14,
   },
-  inputLabel: {
-    color: '#CEB888',
+  fieldLabel: {
     fontSize: 11,
-    fontWeight: '700',
+    fontWeight: '800',
     letterSpacing: 0.8,
+    color: COLORS.goldDark,
     marginBottom: 6,
   },
-  input: {
-    backgroundColor: '#121212',
-    borderWidth: 1,
-    borderColor: '#333',
-    borderRadius: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    color: '#FFF',
-    fontSize: 14,
+  twoColumnRow: {
+    flexDirection: 'row',
+    gap: 12,
   },
-  bioInput: {
+  textInput: {
+    backgroundColor: COLORS.cardSoft,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+    color: COLORS.text,
+  },
+  textArea: {
     minHeight: 80,
     textAlignVertical: 'top',
   },
-  editActionRow: {
+  chipWrapper: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  styleChip: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.cardSoft,
+  },
+  styleChipSelected: {
+    backgroundColor: COLORS.goldSoft,
+    borderColor: COLORS.goldDark,
+  },
+  styleChipText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.muted,
+  },
+  styleChipTextSelected: {
+    color: COLORS.header,
+    fontWeight: '700',
+  },
+  actionsRow: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
-    gap: 12,
-    marginTop: 10,
+    gap: 10,
+    marginTop: 8,
   },
-  cancelButton: {
-    paddingVertical: 12,
-    paddingHorizontal: 18,
-    borderRadius: 8,
+  cancelBtn: {
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#444',
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.cardSoft,
   },
-  cancelButtonText: {
-    color: '#A0A0A0',
-    fontWeight: '600',
-  },
-  saveButton: {
-    backgroundColor: '#CEB888',
-    paddingVertical: 12,
-    paddingHorizontal: 22,
-    borderRadius: 8,
-  },
-  saveButtonText: {
-    color: '#121212',
-    fontWeight: '800',
-    fontSize: 14,
-  },
-  buttonDisabled: {
-    opacity: 0.5,
-  },
-  errorBox: {
-    backgroundColor: 'rgba(239, 68, 68, 0.1)',
-    borderLeftWidth: 3,
-    borderLeftColor: '#EF4444',
-    padding: 10,
-    borderRadius: 6,
-    marginBottom: 16,
-    width: '100%',
-    maxWidth: 480,
-  },
-  errorText: {
-    color: '#FCA5A5',
+  cancelBtnText: {
     fontSize: 13,
-  },
-  successBox: {
-    backgroundColor: 'rgba(34, 197, 94, 0.1)',
-    borderLeftWidth: 3,
-    borderLeftColor: '#22C55E',
-    padding: 10,
-    borderRadius: 6,
-    marginBottom: 16,
-    width: '100%',
-    maxWidth: 480,
-  },
-  successText: {
-    color: '#86EFAC',
-    fontSize: 13,
-  },
-  logoutButton: {
-    marginTop: 10,
-    paddingVertical: 12,
-    paddingHorizontal: 28,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(239, 68, 68, 0.4)',
-    backgroundColor: 'rgba(239, 68, 68, 0.08)',
-  },
-  logoutButtonText: {
-    color: '#F87171',
     fontWeight: '700',
+    color: COLORS.muted,
+  },
+  saveBtn: {
+    paddingVertical: 10,
+    paddingHorizontal: 22,
+    borderRadius: 10,
+    backgroundColor: COLORS.gold,
+  },
+  saveBtnText: {
     fontSize: 13,
-    letterSpacing: 0.5,
+    fontWeight: '800',
+    color: COLORS.white,
+  },
+  logoutBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: COLORS.deleteBackground,
+    borderWidth: 1,
+    borderColor: COLORS.delete,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+  },
+  logoutBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.delete,
   },
 });
