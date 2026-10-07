@@ -32,7 +32,7 @@ function RootLayoutNav() {
     if (!session && !inAuthGroup) {
       router.replace('/(auth)/login');
     } else if (session && inAuthGroup && !isRecovering) {
-      router.replace('/(tabs)/profile');
+      router.replace('/(tabs)');
     }
   }, [session, isLoading, isRecovering, segments, router]);
 
@@ -65,6 +65,13 @@ function RootLayoutNav() {
           options={{
             headerShown: true,
             title: 'Write a Review',
+          }}
+        />
+        <Stack.Screen
+          name="location/[locationId]"
+          options={{
+            headerShown: true,
+            title: 'Study Spot',
           }}
         />
       </Stack>

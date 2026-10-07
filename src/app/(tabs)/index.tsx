@@ -2,12 +2,13 @@
 // Host screen for Neha's stories #9 (filter/sort), #7 (nearby),
 // #12 (favorites), #17 (crowd reports).
 
-import CrowdReportSheet from '@/components/CrowdReportSheet';
 import FavoriteButton from '@/components/FavoriteButton';
 import FilterSheet from '@/components/FilterSheet';
 import { Colors } from '@/constants/theme';
 import { useAuth } from '@/context/AuthContext';
 import { listFavoriteIds } from '@/lib/favorites';
+import { useRouter } from 'expo-router';
+
 import {
   fetchLocations,
   type Coords,
@@ -33,6 +34,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function DiscoverScreen() {
+  const router = useRouter();
   const { user } = useAuth();
 
   const colorScheme = useColorScheme();
@@ -47,7 +49,6 @@ export default function DiscoverScreen() {
   const [nearbyOn, setNearbyOn] = useState(false);
   const [nearbyMessage, setNearbyMessage] = useState('');
   const [filterSheetOpen, setFilterSheetOpen] = useState(false);
-  const [reporting, setReporting] = useState<DiscoverLocation | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -138,29 +139,28 @@ export default function DiscoverScreen() {
       ]}
     >
       <View style={styles.cardContent}>
-        <Text style={[styles.cardName, { color: colors.text }]}>
-          {item.name}
-        </Text>
-
-        <Text
-          style={[
-            styles.cardMeta,
-            { color: colors.textSecondary },
-          ]}
-        >
-          {item.category ?? 'Study spot'}
-          {item.distanceKm != null
-            ? `  ·  ${item.distanceKm.toFixed(1)} km away`
-            : ''}
-        </Text>
-
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={`Report current conditions at ${item.name}`}
-          onPress={() => setReporting(item)}
+          accessibilityLabel={`View details for ${item.name}`}
+          onPress={() => router.push(`/location/${item.id}`)}
         >
-          <Text style={styles.reportLink}>Report conditions</Text>
+          <Text style={[styles.cardName, { color: colors.text }]}>
+            {item.name}
+          </Text>
+
+          <Text
+            style={[
+              styles.cardMeta,
+              { color: colors.textSecondary },
+            ]}
+          >
+            {item.category ?? 'Study spot'}
+            {item.distanceKm != null
+              ? ` · ${item.distanceKm.toFixed(1)} km away`
+              : ''}
+          </Text>
         </Pressable>
+
       </View>
 
       <FavoriteButton
@@ -308,12 +308,6 @@ export default function DiscoverScreen() {
         onChangeSort={setSort}
         onClose={() => setFilterSheetOpen(false)}
       />
-
-      <CrowdReportSheet
-        locationId={reporting?.id ?? null}
-        locationName={reporting?.name}
-        onClose={() => setReporting(null)}
-      />
     </View>
   );
 }
@@ -391,14 +385,6 @@ const styles = StyleSheet.create({
   cardMeta: {
     marginTop: 2,
     fontSize: 13,
-  },
-
-  reportLink: {
-    marginTop: 8,
-    color: '#208AEF',
-    fontWeight: '600',
-    fontSize: 13,
-    minHeight: 24,
   },
 
   emptyWrap: {
