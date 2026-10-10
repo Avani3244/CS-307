@@ -1,6 +1,6 @@
 import { AuthBanner, AuthButton, AuthField, AuthLink, AuthScreen } from '@/components/auth/auth-ui';
 import { useAuth } from '@/context/AuthContext';
-import { clearAuthLink, describeLinkError, useAuthLink } from '@/lib/auth-links';
+import { AuthLink as AuthLinkData, clearAuthLink, describeLinkError, useAuthLink } from '@/lib/auth-links';
 import {
     PASSWORD_REQUIREMENTS,
     validatePassword,
@@ -18,8 +18,10 @@ type Status = 'checking' | 'ready' | 'invalid';
 export default function ResetPasswordScreen() {
   const router = useRouter();
   const { beginRecovery, updatePassword, finishRecovery } = useAuth();
-  const { link, checked } = useAuthLink();
-  const handled = useRef(false);
+  const { link, checked, lastUrl } = useAuthLink();
+  // The link object we last acted on. Compared by identity so a *new* link sent
+  // to a screen that is already open is processed instead of being ignored.
+  const processed = useRef<AuthLinkData | null>(null);
 
   const [status, setStatus] = useState<Status>('checking');
   const [linkMessage, setLinkMessage] = useState('');
@@ -30,16 +32,20 @@ export default function ResetPasswordScreen() {
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    if (handled.current || !checked) return;
+    if (!checked) return;
 
     if (!link) {
-      setLinkMessage('This reset link is missing or incomplete.');
-      setStatus('invalid');
+      if (!processed.current) {
+        setLinkMessage('This reset link is missing or incomplete.');
+        setStatus('invalid');
+      }
       return;
     }
 
-    handled.current = true;
+    if (processed.current === link) return;
+    processed.current = link;
     clearAuthLink();
+    setStatus('checking');
 
     if (link.errorCode || !link.accessToken || !link.refreshToken) {
       setLinkMessage(describeLinkError(link));
@@ -91,6 +97,11 @@ export default function ResetPasswordScreen() {
     return (
       <AuthScreen heading="Reset link problem">
         <AuthBanner kind="error">{linkMessage} Request a new link to reset your password.</AuthBanner>
+      {__DEV__ ? (
+        <AuthBanner kind="info">
+          Dev: last link received — {lastUrl ?? 'none (the app never received a link)'}
+        </AuthBanner>
+      ) : null}
         <AuthButton label="Request a New Link" onPress={() => router.replace('/forgot-password')} />
         <AuthLink label="Back to Login" accent onPress={() => router.replace('/login')} />
       </AuthScreen>

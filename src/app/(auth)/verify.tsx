@@ -1,5 +1,5 @@
 import { AuthBanner, AuthButton, AuthScreen } from '@/components/auth/auth-ui';
-import { clearAuthLink, describeLinkError, useAuthLink } from '@/lib/auth-links';
+import { AuthLink as AuthLinkData, clearAuthLink, describeLinkError, useAuthLink } from '@/lib/auth-links';
 import { useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator } from 'react-native';
@@ -11,21 +11,25 @@ type Status = 'checking' | 'verified' | 'invalid';
 // link and send the user on to Login (we deliberately don't sign them in here).
 export default function VerifyScreen() {
   const router = useRouter();
-  const { link, checked } = useAuthLink();
-  const handled = useRef(false);
+  const { link, checked, lastUrl } = useAuthLink();
+  // The link object we last acted on (identity check, so a new link is not ignored).
+  const processed = useRef<AuthLinkData | null>(null);
   const [status, setStatus] = useState<Status>('checking');
   const [message, setMessage] = useState('');
 
   useEffect(() => {
-    if (handled.current || !checked) return;
+    if (!checked) return;
 
     if (!link) {
-      setMessage('This verification link is missing or incomplete. Open the link from your verification email.');
-      setStatus('invalid');
+      if (!processed.current) {
+        setMessage('This verification link is missing or incomplete. Open the link from your verification email.');
+        setStatus('invalid');
+      }
       return;
     }
 
-    handled.current = true;
+    if (processed.current === link) return;
+    processed.current = link;
     if (link.errorCode || !link.accessToken) {
       setMessage(`${describeLinkError(link)} Create your account again or sign in to request a new verification email.`);
       setStatus('invalid');
@@ -55,6 +59,11 @@ export default function VerifyScreen() {
   return (
     <AuthScreen heading="Verification failed">
       <AuthBanner kind="error">{message}</AuthBanner>
+      {__DEV__ ? (
+        <AuthBanner kind="info">
+          Dev: last link received — {lastUrl ?? 'none (the app never received a link)'}
+        </AuthBanner>
+      ) : null}
       <AuthButton label="Back to Login" onPress={() => router.replace('/login')} />
     </AuthScreen>
   );
