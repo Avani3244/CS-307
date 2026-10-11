@@ -5,11 +5,13 @@
 import CrowdReportSheet from '@/components/CrowdReportSheet';
 import FavoriteButton from '@/components/FavoriteButton';
 import FilterSheet from '@/components/FilterSheet';
+import StudyLocationCard from '@/components/study-location-card';
 import { Colors } from '@/constants/theme';
 import { useAuth } from '@/context/AuthContext';
 import { listFavoriteIds } from '@/lib/favorites';
 import {
   fetchLocations,
+  getStudyLocations,
   type Coords,
   type DiscoverLocation,
   type Filters,
@@ -49,6 +51,7 @@ export default function DiscoverScreen() {
   const [filterSheetOpen, setFilterSheetOpen] = useState(false);
   const [reporting, setReporting] = useState<DiscoverLocation | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
 
   const load = useCallback(async () => {
@@ -56,20 +59,27 @@ export default function DiscoverScreen() {
 
     try {
       setLocations(
-        await fetchLocations({
-          filters,
-          sort,
-          coords: nearbyOn ? coords : null,
-        })
+        Object.keys(filters).length === 0 && sort === 'name' && !nearbyOn
+          ? await getStudyLocations()
+          : await fetchLocations({
+              filters,
+              sort,
+              coords: nearbyOn ? coords : null,
+            })
       );
 
       if (user) {
-        setFavoriteIds(await listFavoriteIds(user.id));
+        try {
+          setFavoriteIds(await listFavoriteIds(user.id));
+        } catch {
+          setError('Study locations loaded, but favorites could not be loaded. Pull to retry.');
+        }
       }
     } catch {
       setError('Could not load study locations. Pull to retry.');
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   }, [filters, sort, nearbyOn, coords, user]);
 
@@ -112,6 +122,8 @@ export default function DiscoverScreen() {
   };
 
   const refreshLocations = async () => {
+    if (refreshing) return;
+    setRefreshing(true);
     if (nearbyOn) {
       try {
         const position = await Location.getCurrentPositionAsync({});
@@ -122,6 +134,7 @@ export default function DiscoverScreen() {
         });
       } catch {
         setError('Could not refresh your current location.');
+        setRefreshing(false);
       }
     } else {
       await load();
@@ -138,21 +151,13 @@ export default function DiscoverScreen() {
       ]}
     >
       <View style={styles.cardContent}>
-        <Text style={[styles.cardName, { color: colors.text }]}>
-          {item.name}
-        </Text>
+        <StudyLocationCard location={item} />
 
-        <Text
-          style={[
-            styles.cardMeta,
-            { color: colors.textSecondary },
-          ]}
-        >
-          {item.category ?? 'Study spot'}
-          {item.distanceKm != null
-            ? `  ·  ${item.distanceKm.toFixed(1)} km away`
-            : ''}
-        </Text>
+        {item.distanceKm != null && (
+          <Text style={[styles.cardMeta, { color: colors.textSecondary }]}>
+            {item.distanceKm.toFixed(1)} km away
+          </Text>
+        )}
 
         <Pressable
           accessibilityRole="button"
@@ -243,6 +248,7 @@ export default function DiscoverScreen() {
 
       {loading ? (
         <ActivityIndicator
+          accessibilityLabel="Loading study locations"
           style={styles.loading}
           size="large"
           color="#208AEF"
@@ -254,7 +260,7 @@ export default function DiscoverScreen() {
           renderItem={renderCard}
           refreshControl={
             <RefreshControl
-              refreshing={false}
+              refreshing={refreshing}
               onRefresh={refreshLocations}
             />
           }
@@ -271,7 +277,11 @@ export default function DiscoverScreen() {
                   { color: colors.text },
                 ]}
               >
-                No study spots match your filters
+                {error
+                  ? 'Study locations unavailable'
+                  : activeFilterCount > 0
+                    ? 'No study spots match your filters'
+                    : 'No study locations yet'}
               </Text>
 
               <Text
@@ -280,11 +290,24 @@ export default function DiscoverScreen() {
                   { color: colors.textSecondary },
                 ]}
               >
-                Try removing a filter, or clear them all to see every
-                location.
+                {error
+                  ? 'Try again to load study locations.'
+                  : activeFilterCount > 0
+                    ? 'Try removing a filter, or clear them all to see every location.'
+                    : 'Check back later or pull down to refresh.'}
               </Text>
 
-              {activeFilterCount > 0 && (
+              {!!error && (
+                <Pressable
+                  accessibilityRole="button"
+                  disabled={refreshing}
+                  onPress={refreshLocations}
+                >
+                  <Text style={styles.emptyClear}>Try again</Text>
+                </Pressable>
+              )}
+
+              {!error && activeFilterCount > 0 && (
                 <Pressable
                   accessibilityRole="button"
                   onPress={() => setFilters({})}
@@ -381,11 +404,6 @@ const styles = StyleSheet.create({
 
   cardContent: {
     flex: 1,
-  },
-
-  cardName: {
-    fontSize: 16,
-    fontWeight: '700',
   },
 
   cardMeta: {
