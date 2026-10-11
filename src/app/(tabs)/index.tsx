@@ -17,6 +17,7 @@ import {
 } from '@/lib/locations';
 
 import * as Location from 'expo-location';
+import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 
 import {
@@ -34,6 +35,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function DiscoverScreen() {
   const { user } = useAuth();
+  const router = useRouter();
 
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme === 'dark' ? 'dark' : 'light'];
@@ -138,21 +140,27 @@ export default function DiscoverScreen() {
       ]}
     >
       <View style={styles.cardContent}>
-        <Text style={[styles.cardName, { color: colors.text }]}>
-          {item.name}
-        </Text>
-
-        <Text
-          style={[
-            styles.cardMeta,
-            { color: colors.textSecondary },
-          ]}
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`View details for ${item.name}`}
+          onPress={() => router.push(`/location/${item.id}`)}
         >
-          {item.category ?? 'Study spot'}
-          {item.distanceKm != null
-            ? `  ·  ${item.distanceKm.toFixed(1)} km away`
-            : ''}
-        </Text>
+          <Text style={[styles.cardName, { color: colors.text }]}>
+            {item.name}
+          </Text>
+
+          <Text
+            style={[
+              styles.cardMeta,
+              { color: colors.textSecondary },
+            ]}
+          >
+            {item.category ?? 'Study spot'}
+            {item.distanceKm != null
+              ? `  ·  ${item.distanceKm.toFixed(1)} km away`
+              : ''}
+          </Text>
+        </Pressable>
 
         <Pressable
           accessibilityRole="button"
