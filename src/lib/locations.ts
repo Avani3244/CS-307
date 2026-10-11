@@ -5,29 +5,22 @@ import { StudyLocation } from '@/types/study-location';
 export type DiscoverLocation = StudyLocation & { distanceKm?: number };
 export type { StudyLocation } from '@/types/study-location';
 
-export async function getStudyLocations(): Promise<StudyLocation[]> {
+export async function getStudyLocations(
+  { includeRatings = false }: { includeRatings?: boolean } = {}
+): Promise<StudyLocation[]> {
+  const columns = 'id, name, category, building, campus_area, address, latitude, longitude, description, hours';
   const { data, error } = await supabase
     .from('study_locations')
-    .select(`
-      id,
-      name,
-      category,
-      building,
-      campus_area,
-      address,
-      latitude,
-      longitude,
-      description,
-      hours
-    `)
-    .order('name');
+    .select(includeRatings ? `${columns}, reviews(overall_rating)` : columns)
+    .order('name')
+    .returns<StudyLocation[]>();
 
   if (error) {
     console.error('Error loading study locations:', error.message);
     throw error;
   }
 
-  return (data ?? []) as StudyLocation[];
+  return data ?? [];
 }
 
 // ------------------------------------------------------------

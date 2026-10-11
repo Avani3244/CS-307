@@ -18,7 +18,7 @@ export default function MapScreen() {
     setLoading(true);
     setError('');
     try {
-      setLocations(await getStudyLocations());
+      setLocations(await getStudyLocations({ includeRatings: true }));
     } catch {
       setError('Could not load study locations. Please try again.');
     } finally {
