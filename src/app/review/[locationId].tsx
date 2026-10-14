@@ -3,16 +3,17 @@ import { supabase } from '@/lib/supabase';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { decode } from 'base64-arraybuffer';
 import * as ImagePicker from 'expo-image-picker';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { ComponentProps } from 'react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Alert,
   Image,
   Pressable,
   ScrollView,
+  StatusBar,
   StyleSheet,
   Text,
   TextInput,
@@ -107,9 +108,46 @@ function RatingSelector({
 
 export default function ReviewScreen() {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
 
   const params = useLocalSearchParams<{ locationId?: string }>();
   const locationId = params.locationId ?? 'Unknown location';
+  const [locationName, setLocationName] = useState<string | null>(null);
+  const [locationCategory, setLocationCategory] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+
+    const loadLocationName = async () => {
+      if (locationId === 'Unknown location') {
+        setLocationName(null);
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from('study_locations')
+        .select('name, category')
+        .eq('id', locationId)
+        .maybeSingle();
+
+      if (!active) return;
+
+      if (error) {
+        console.error('Could not load location name:', error);
+      }
+
+      setLocationName(data?.name ?? null);
+      setLocationCategory(data?.category ?? null);
+    };
+
+    void loadLocationName();
+
+    return () => {
+      active = false;
+    };
+  }, [locationId]);
+
+
 
   const [overallRating, setOverallRating] =
     useState<number | null>(null);
@@ -125,6 +163,14 @@ export default function ReviewScreen() {
     useState<ImagePicker.ImagePickerAsset | null>(null);
 
   const [reviewsRefreshKey, setReviewsRefreshKey] = useState(0);
+
+  const [reviewSummary, setReviewSummary] = useState<{
+    average: number | null;
+    count: number;
+  }>({
+    average: null,
+    count: 0,
+  });
 
   const updateCategoryRating = (
     category: string,
@@ -332,13 +378,77 @@ export default function ReviewScreen() {
     }
   };
 
-  const shortLocationId =
-    locationId === 'Unknown location'
+  const locationDisplayName =
+    locationName ??
+    (locationId === 'Unknown location'
       ? 'No location selected'
-      : `${locationId.slice(0, 8)}…`;
+      : `${locationId.slice(0, 8)}...`);
 
   return (
     <View style={styles.screen}>
+      <StatusBar barStyle="dark-content" />
+
+      <View
+        style={[
+          styles.reviewHeader,
+          { paddingTop: insets.top + 10 },
+        ]}
+      >
+        <View style={styles.reviewHeaderTop}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+            onPress={() => router.back()}
+            style={styles.headerBackButton}
+          >
+            <MaterialCommunityIcons
+              name="arrow-left"
+              size={25}
+              color={COLORS.text}
+            />
+          </Pressable>
+
+          <Text style={styles.reviewHeaderTitle}>
+            Write a Review
+          </Text>
+        </View>
+
+        <View style={styles.reviewHeroCard}>
+          <View style={styles.reviewHeroIcon}>
+            <MaterialCommunityIcons
+              name="map-marker"
+              size={34}
+              color={COLORS.goldDark}
+            />
+          </View>
+
+          <Text style={styles.reviewHeroName}>
+            {locationDisplayName}
+          </Text>
+
+          <View style={styles.reviewHeroMetaRow}>
+            <Text style={styles.reviewHeroCategory}>
+              {locationCategory || 'Study Location'}
+            </Text>
+
+            <View style={styles.reviewHeroRatingPill}>
+              <MaterialCommunityIcons
+                name="star"
+                size={18}
+                color={COLORS.gold}
+              />
+
+              <Text style={styles.reviewHeroRatingText}>
+                {reviewSummary.average !== null
+                  ? `${reviewSummary.average.toFixed(1)} · ${reviewSummary.count} ${reviewSummary.count === 1 ? 'review' : 'reviews'
+                  }`
+                  : 'No reviews yet'}
+              </Text>
+            </View>
+          </View>
+        </View>
+      </View>
+
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={[
@@ -351,28 +461,7 @@ export default function ReviewScreen() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.locationCard}>
-          <View style={styles.locationIconBox}>
-            <MaterialCommunityIcons
-              name="map-marker"
-              size={31}
-              color={COLORS.goldDark}
-            />
-          </View>
 
-          <View style={styles.locationInfo}>
-            <Text style={styles.locationTitle}>
-              Selected Study Location
-            </Text>
-
-            <Text
-              numberOfLines={1}
-              style={styles.locationSubtitle}
-            >
-              {shortLocationId}
-            </Text>
-          </View>
-        </View>
 
         <View style={styles.sectionCard}>
           <View style={styles.sectionHeader}>
@@ -380,7 +469,7 @@ export default function ReviewScreen() {
               <MaterialCommunityIcons
                 name="star"
                 size={20}
-                color={COLORS.white}
+                color={COLORS.gold}
               />
             </View>
 
@@ -421,7 +510,7 @@ export default function ReviewScreen() {
               <MaterialCommunityIcons
                 name="tune-variant"
                 size={19}
-                color={COLORS.white}
+                color={COLORS.gold}
               />
             </View>
 
@@ -443,7 +532,7 @@ export default function ReviewScreen() {
                 style={[
                   styles.categoryRow,
                   index < studyCategories.length - 1 &&
-                    styles.categoryDivider,
+                  styles.categoryDivider,
                 ]}
               >
                 <View style={styles.categoryIdentity}>
@@ -451,7 +540,7 @@ export default function ReviewScreen() {
                     <MaterialCommunityIcons
                       name={categoryIcons[category]}
                       size={22}
-                      color={COLORS.icon}
+                      color={COLORS.gold}
                     />
                   </View>
 
@@ -488,7 +577,7 @@ export default function ReviewScreen() {
               <MaterialCommunityIcons
                 name="pencil"
                 size={19}
-                color={COLORS.white}
+                color={COLORS.gold}
               />
             </View>
 
@@ -518,7 +607,7 @@ export default function ReviewScreen() {
               <MaterialCommunityIcons
                 name="image"
                 size={20}
-                color={COLORS.white}
+                color={COLORS.gold}
               />
             </View>
 
@@ -545,7 +634,7 @@ export default function ReviewScreen() {
               <MaterialCommunityIcons
                 name="image-plus"
                 size={27}
-                color={COLORS.goldDark}
+                color={COLORS.gold}
               />
 
               <Text style={styles.photoButtonText}>
@@ -585,10 +674,10 @@ export default function ReviewScreen() {
           style={({ pressed }) => [
             styles.submitButton,
             isSubmitting &&
-              styles.submitButtonDisabled,
+            styles.submitButtonDisabled,
             pressed &&
-              !isSubmitting &&
-              styles.submitButtonPressed,
+            !isSubmitting &&
+            styles.submitButtonPressed,
           ]}
         >
           <Text style={styles.submitButtonText}>
@@ -610,6 +699,7 @@ export default function ReviewScreen() {
           <LocationReviewsSection
             locationId={locationId}
             refreshKey={reviewsRefreshKey}
+            onSummaryChange={setReviewSummary}
           />
         </View>
       </ScrollView>
@@ -617,7 +707,136 @@ export default function ReviewScreen() {
   );
 }
 
+
+
 const styles = StyleSheet.create({
+
+  reviewHeader: {
+    backgroundColor: COLORS.page,
+    paddingHorizontal: 18,
+    paddingBottom: 18,
+  },
+
+  reviewHeaderTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+  },
+
+  headerBackButton: {
+    width: 43,
+    height: 43,
+    borderRadius: 22,
+    backgroundColor: COLORS.goldSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  headerTitleGroup: {
+    flex: 1,
+  },
+
+  reviewHeaderTitle: {
+    color: COLORS.text,
+    fontSize: 23,
+    fontWeight: '900',
+  },
+
+  reviewHeaderSubtitle: {
+    marginTop: 3,
+    color: COLORS.muted,
+    fontSize: 13,
+  },
+
+  headerLocationRow: {
+    marginTop: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 13,
+  },
+
+  headerThumbnail: {
+    width: 85,
+    height: 78,
+    borderRadius: 17,
+    backgroundColor: COLORS.goldSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  headerLocationInfo: {
+    flex: 1,
+    gap: 6,
+  },
+
+  headerCategory: {
+    color: COLORS.text,
+    fontSize: 16,
+    fontWeight: '700',
+  },
+
+  headerMeta: {
+    color: COLORS.goldDark,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+
+  reviewHeroCard: {
+    marginTop: 18,
+    padding: 22,
+    borderRadius: 25,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.card,
+  },
+
+  reviewHeroIcon: {
+    width: 62,
+    height: 62,
+    borderRadius: 18,
+    backgroundColor: COLORS.goldSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  reviewHeroName: {
+    marginTop: 14,
+    color: COLORS.text,
+    fontSize: 28,
+    fontWeight: '800',
+    letterSpacing: -0.5,
+  },
+
+  reviewHeroMetaRow: {
+    marginTop: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+
+  reviewHeroCategory: {
+    color: COLORS.muted,
+    fontSize: 15,
+    fontWeight: '600',
+  },
+
+  reviewHeroRatingPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 11,
+    paddingVertical: 7,
+    borderRadius: 20,
+    backgroundColor: COLORS.goldSoft,
+  },
+
+  reviewHeroRatingText: {
+    color: COLORS.goldDark,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+
   screen: {
     flex: 1,
     backgroundColor: COLORS.page,
@@ -631,9 +850,9 @@ const styles = StyleSheet.create({
   },
 
   container: {
-    paddingTop: 18,
-    paddingHorizontal: 14,
-    gap: 18,
+    paddingTop: 16,
+    paddingHorizontal: 16,
+    gap: 16,
   },
 
   locationCard: {
@@ -643,18 +862,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.border,
     backgroundColor: COLORS.card,
-
     flexDirection: 'row',
     alignItems: 'center',
-
-    shadowColor: '#5B3D28',
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
-    elevation: 3,
   },
 
   locationIconBox: {
@@ -684,20 +893,11 @@ const styles = StyleSheet.create({
   },
 
   sectionCard: {
-    padding: 17,
+    padding: 19,
     borderRadius: 23,
     borderWidth: 1,
     borderColor: COLORS.border,
     backgroundColor: COLORS.card,
-
-    shadowColor: '#5B3D28',
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    shadowOpacity: 0.09,
-    shadowRadius: 10,
-    elevation: 3,
   },
 
   sectionHeader: {
@@ -713,10 +913,10 @@ const styles = StyleSheet.create({
   },
 
   sectionIconCircle: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: COLORS.icon,
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    backgroundColor: COLORS.goldSoft,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
@@ -731,8 +931,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     color: COLORS.text,
     fontSize: 19,
-    fontWeight: '800',
-    letterSpacing: -0.25,
+    fontWeight: '900',
   },
 
   helperText: {
@@ -855,7 +1054,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 11,
-    backgroundColor: COLORS.cardSoft,
+    backgroundColor: COLORS.goldSoft,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 9,
@@ -980,6 +1179,12 @@ const styles = StyleSheet.create({
   },
 
   reviewsSection: {
-    marginHorizontal: -14,
+    marginHorizontal: -16,
+  },
+
+  headerRatingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
 });

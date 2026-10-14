@@ -82,7 +82,10 @@ export default function FavoritesScreen() {
               accessibilityRole="button"
               accessibilityLabel={`View details for ${item.name}`}
               style={{ flex: 1 }}
-              onPress={() => router.push(`/location/${item.id}`)}>
+              onPress={() => router.push({
+                pathname: '/location/[id]',
+                params: { id: item.id },
+              })}>
               <Text style={styles.cardName}>{item.name}</Text>
               <Text style={styles.cardMeta}>{item.category ?? 'Study spot'}</Text>
             </Pressable>

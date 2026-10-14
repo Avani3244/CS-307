@@ -62,10 +62,7 @@ function RootLayoutNav() {
 
         <Stack.Screen
           name="review/[locationId]"
-          options={{
-            headerShown: true,
-            title: 'Write a Review',
-          }}
+          options={{ headerShown: false }}
         />
 
         <Stack.Screen

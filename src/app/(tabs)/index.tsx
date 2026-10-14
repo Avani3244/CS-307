@@ -148,7 +148,10 @@ export default function DiscoverScreen() {
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={`View details for ${item.name}`}
-          onPress={() => router.push(`/location/${item.id}`)}
+          onPress={() => router.push({
+            pathname: '/location/[id]',
+            params: { id: item.id },
+          })}
           style={styles.cardMain}
         >
           <View style={styles.thumbnail}>
