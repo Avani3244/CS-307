@@ -1,6 +1,7 @@
 // src/app/location/[id].tsx - Study location detail
 // Story #11: name, category, address, description, hours, and amenities for one location.
 
+import CrowdReportSheet from '@/components/CrowdReportSheet';
 import {
   buildHoursRows,
   formatAmenityValue,
@@ -23,6 +24,7 @@ import {
   Text,
   View,
 } from 'react-native';
+
 
 const COLORS = {
   page: '#F1E2D2',
@@ -62,6 +64,7 @@ export default function LocationDetailScreen() {
   const router = useRouter();
   const [state, setState] = useState<State>({ status: 'loading' });
   const [refreshing, setRefreshing] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
   // Guards against an older request resolving after a newer one (retry / id change).
   const requestId = useRef(0);
 
@@ -267,6 +270,33 @@ export default function LocationDetailScreen() {
 
       <Pressable
         accessibilityRole="button"
+        onPress={() => setReportOpen(true)}
+        style={styles.conditionButton}
+      >
+        <MaterialCommunityIcons
+          name="account-group-outline"
+          size={22}
+          color={COLORS.goldDark}
+        />
+
+        <View style={styles.conditionText}>
+          <Text style={styles.conditionTitle}>
+            Report Current Conditions
+          </Text>
+          <Text style={styles.conditionSubtitle}>
+            Share the crowd, seating, and noise level right now.
+          </Text>
+        </View>
+
+        <MaterialCommunityIcons
+          name="chevron-right"
+          size={23}
+          color={COLORS.goldDark}
+        />
+      </Pressable>
+
+      <Pressable
+        accessibilityRole="button"
         onPress={() =>
           router.push({
             pathname: '/review/[locationId]',
@@ -281,6 +311,8 @@ export default function LocationDetailScreen() {
           color="#FFFFFF"
         />
 
+
+
         <Text style={styles.reviewButtonText}>
           Ratings & Reviews
         </Text>
@@ -291,6 +323,11 @@ export default function LocationDetailScreen() {
           color="#FFFFFF"
         />
       </Pressable>
+      <CrowdReportSheet
+        locationId={reportOpen ? location.id : null}
+        locationName={location.name}
+        onClose={() => setReportOpen(false)}
+      />
     </ScrollView>
   );
 }
@@ -562,6 +599,36 @@ const styles = StyleSheet.create({
     color: COLORS.muted,
     fontSize: 14,
     lineHeight: 20,
+  },
+
+  conditionButton: {
+    minHeight: 76,
+    paddingHorizontal: 18,
+    paddingVertical: 13,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.card,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+
+  conditionText: {
+    flex: 1,
+  },
+
+  conditionTitle: {
+    color: COLORS.text,
+    fontSize: 16,
+    fontWeight: '800',
+  },
+
+  conditionSubtitle: {
+    marginTop: 3,
+    color: COLORS.muted,
+    fontSize: 13,
+    lineHeight: 18,
   },
 
   reviewButton: {
