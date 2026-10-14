@@ -1,7 +1,6 @@
 // src/app/location/[id].tsx - Study location detail
 // Story #11: name, category, address, description, hours, and amenities for one location.
 
-import { isLocationOpen } from '@/lib/location-hours';
 import {
   buildHoursRows,
   formatAmenityValue,
@@ -11,6 +10,8 @@ import {
   NOT_AVAILABLE,
   type LocationDetail,
 } from '@/lib/location-detail';
+import { isLocationOpen } from '@/lib/location-hours';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import {
@@ -36,6 +37,18 @@ const COLORS = {
   greenBackground: '#EAF4DE',
   red: '#A22B25',
   redBackground: '#F9DDD7',
+};
+
+const amenityIcons: Record<
+  string,
+  React.ComponentProps<typeof MaterialCommunityIcons>['name']
+> = {
+  'Seating': 'seat',
+  'Wi-Fi': 'wifi',
+  'Outlets': 'power-plug',
+  'Food access': 'silverware-fork-knife',
+  'Quietness': 'volume-low',
+  'Study type': 'account-group-outline',
 };
 
 type State =
@@ -137,6 +150,13 @@ export default function LocationDetailScreen() {
       <Stack.Screen options={{ title: location.name }} />
 
       <View style={styles.header}>
+        <View style={styles.locationIcon}>
+          <MaterialCommunityIcons
+            name="map-marker"
+            size={34}
+            color={COLORS.goldDark}
+          />
+        </View>
         <Text style={styles.name}>{location.name}</Text>
         <View style={styles.headerRow}>
           <Text style={styles.category}>{formatOptionalText(location.category)}</Text>
@@ -158,34 +178,70 @@ export default function LocationDetailScreen() {
             </Text>
           </View>
         </View>
+
+        <View style={styles.infoRow}>
+          <MaterialCommunityIcons
+            name="map-marker-outline"
+            size={18}
+            color={COLORS.muted}
+          />
+          <Text style={styles.infoText}>
+            {formatOptionalText(location.address)}
+          </Text>
+        </View>
+
+        <View style={styles.infoRow}>
+          <MaterialCommunityIcons
+            name="office-building-outline"
+            size={18}
+            color={COLORS.muted}
+          />
+          <Text style={styles.infoText}>
+            {formatOptionalText(location.building)}
+          </Text>
+        </View>
+
+        <View style={styles.infoRow}>
+          <MaterialCommunityIcons
+            name="school-outline"
+            size={18}
+            color={COLORS.muted}
+          />
+          <Text style={styles.infoText}>
+            {formatOptionalText(location.campus_area)}
+          </Text>
+        </View>
       </View>
 
       <Section title="About">
+
+
         <Value text={location.description} />
       </Section>
 
-      <Section title="Address">
-        <Row label="Building" text={location.building} />
-        <Row label="Address" text={location.address} />
-        <Row label="Campus area" text={location.campus_area} last />
-      </Section>
 
-      <Section title="Operating hours">
+      <Section title="Operating hours" icon="clock-outline">
         {hoursRows === null ? (
           <Value text={null} />
         ) : (
           hoursRows.map((row, index) => (
             <View
               key={row.key}
-              style={[styles.row, index === hoursRows.length - 1 && styles.rowLast]}
+              style={[
+                styles.row,
+                styles.hoursRow,
+                index === hoursRows.length - 1 && styles.rowLast,
+              ]}
             >
-              <Text style={[styles.rowLabel, row.isToday && styles.today]}>
+
+              <Text style={[styles.rowLabel, styles.hoursDay, row.isToday && styles.today]}>
                 {row.label}
                 {row.isToday ? ' (today)' : ''}
               </Text>
               <Text
                 style={[
                   styles.rowValue,
+                  styles.hoursValue,
                   !row.available && styles.unavailable,
                   row.isToday && styles.today,
                 ]}
@@ -197,25 +253,78 @@ export default function LocationDetailScreen() {
         )}
       </Section>
 
-      <Section title="Amenities">
+      <Section title="Amenities" icon="check-circle-outline">
         <Row label="Seating" text={amenities.seating} amenity />
         <Row label="Wi-Fi" text={amenities.wifi} amenity />
         <Row label="Outlets" text={amenities.outlets} amenity />
         <Row label="Food access" text={amenities.food} amenity last />
       </Section>
 
-      <Section title="Study environment">
+      <Section title="Study environment" icon="volume-low">
         <Row label="Quietness" text={amenities.quietness} amenity />
         <Row label="Study type" text={amenities.study_type} amenity last />
       </Section>
+
+      <Pressable
+        accessibilityRole="button"
+        onPress={() =>
+          router.push({
+            pathname: '/review/[locationId]',
+            params: { locationId: location.id },
+          })
+        }
+        style={styles.reviewButton}
+      >
+        <MaterialCommunityIcons
+          name="star-outline"
+          size={22}
+          color="#FFFFFF"
+        />
+
+        <Text style={styles.reviewButtonText}>
+          Ratings & Reviews
+        </Text>
+
+        <MaterialCommunityIcons
+          name="chevron-right"
+          size={23}
+          color="#FFFFFF"
+        />
+      </Pressable>
     </ScrollView>
   );
 }
 
-function Section({ title, children }: { title: string; children: ReactNode }) {
+function Section({
+  title,
+  children,
+  icon,
+}: {
+  title: string;
+  children: ReactNode;
+  icon?: React.ComponentProps<typeof MaterialCommunityIcons>['name'];
+}) {
   return (
     <View style={styles.section}>
-      <Text style={styles.sectionTitle}>{title}</Text>
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 8,
+          marginBottom: 12,
+        }}
+      >
+        {icon && (
+          <MaterialCommunityIcons
+            name={icon}
+            size={22}
+            color={COLORS.goldDark}
+          />
+        )}
+        <Text style={[styles.sectionTitle, { marginBottom: 0 }]}>
+          {title}
+        </Text>
+      </View>
       {children}
     </View>
   );
@@ -241,18 +350,51 @@ function Row({
 }) {
   const display = amenity ? formatAmenityValue(text) : formatOptionalText(text);
   return (
-    <View style={[styles.row, last && styles.rowLast]}>
-      <Text style={styles.rowLabel}>{label}</Text>
-      <Text style={[styles.rowValue, display === NOT_AVAILABLE && styles.unavailable]}>
-        {display}
-      </Text>
+    <View style={[styles.row, amenity && styles.amenityRow, last && styles.rowLast]}>
+      {amenity ? (
+        <>
+          <View style={styles.amenityIconTile}>
+            <MaterialCommunityIcons
+              name={amenityIcons[label] ?? 'check-circle-outline'}
+              size={21}
+              color={COLORS.goldDark}
+            />
+          </View>
+
+          <View style={styles.amenityText}>
+            <Text style={styles.amenityName}>
+              {label}
+            </Text>
+
+            <Text
+              style={[
+                styles.amenityValue,
+                display === NOT_AVAILABLE && styles.unavailable,
+              ]}
+            >
+              {display}
+            </Text>
+          </View>
+        </>
+      ) : (
+        <>
+          <Text style={styles.rowLabel}>{label}</Text>
+          <Text style={[styles.rowValue, display === NOT_AVAILABLE && styles.unavailable]}>
+            {display}
+          </Text>
+        </>
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   page: { flex: 1, backgroundColor: COLORS.page },
-  content: { padding: 16, paddingBottom: 40 },
+  content: {
+    padding: 16,
+    paddingBottom: 48,
+    gap: 16,
+  },
   center: { alignItems: 'center', justifyContent: 'center', padding: 32 },
   centerTitle: { fontSize: 18, fontWeight: '700', color: COLORS.text, textAlign: 'center' },
   centerNote: { marginTop: 8, fontSize: 14, color: COLORS.muted, textAlign: 'center' },
@@ -268,15 +410,47 @@ const styles = StyleSheet.create({
   linkButton: { marginTop: 8, minHeight: 44, justifyContent: 'center' },
   linkButtonText: { color: COLORS.goldDark, fontWeight: '600', fontSize: 14 },
 
-  header: { marginBottom: 14 },
-  name: { fontSize: 24, fontWeight: '800', color: COLORS.text },
+  header: {
+    padding: 22,
+    borderRadius: 25,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.card,
+  },
+
+  locationIcon: {
+    width: 62,
+    height: 62,
+    marginBottom: 15,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F4DFC3',
+  },
+
+  name: {
+    color: COLORS.text,
+    fontSize: 28,
+    lineHeight: 34,
+    fontWeight: '900',
+    letterSpacing: -0.5,
+  },
   headerRow: {
-    marginTop: 8,
+    marginTop: 4,
+    marginBottom: 14,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    gap: 8,
   },
-  category: { fontSize: 15, color: COLORS.muted, fontWeight: '600', flexShrink: 1 },
+
+  category: {
+    color: COLORS.goldDark,
+    fontSize: 14,
+    fontWeight: '700',
+    flexShrink: 1,
+  },
+
   statusPill: {
     paddingHorizontal: 10,
     paddingVertical: 4,
@@ -289,21 +463,77 @@ const styles = StyleSheet.create({
 
   section: {
     backgroundColor: COLORS.card,
-    borderRadius: 14,
+    borderRadius: 23,
     borderWidth: 1,
     borderColor: COLORS.border,
-    padding: 16,
+    padding: 19,
+  },
+
+  sectionTitle: {
+    fontSize: 19,
+    fontWeight: '900',
+    color: COLORS.text,
     marginBottom: 12,
   },
-  sectionTitle: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: COLORS.goldDark,
-    letterSpacing: 0.8,
-    textTransform: 'uppercase',
-    marginBottom: 10,
+  body: {
+    color: COLORS.muted,
+    fontSize: 15,
+    lineHeight: 22,
   },
-  body: { fontSize: 15, lineHeight: 22, color: COLORS.text },
+  hoursRow: {
+    minHeight: 46,
+    alignItems: 'center',
+  },
+
+  hoursValue: {
+    flex: 1,
+    marginLeft: 16,
+    color: COLORS.muted,
+    fontSize: 13,
+    fontWeight: '400',
+    textAlign: 'right',
+  },
+
+  hoursDay: {
+    color: COLORS.text,
+    fontWeight: '700',
+  },
+  amenityRow: {
+    minHeight: 57,
+    paddingVertical: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    gap: 0,
+    borderBottomWidth: 1,
+    borderBottomColor: '#EAD7C6',
+  },
+
+  amenityIconTile: {
+    width: 39,
+    height: 39,
+    marginRight: 11,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FAEFE4',
+  },
+
+  amenityText: {
+    flex: 1,
+  },
+
+  amenityName: {
+    color: COLORS.text,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+
+  amenityValue: {
+    marginTop: 2,
+    color: COLORS.muted,
+    fontSize: 13,
+  },
   row: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -318,4 +548,38 @@ const styles = StyleSheet.create({
   rowValue: { fontSize: 14, color: COLORS.text, fontWeight: '600', flexShrink: 1, textAlign: 'right' },
   unavailable: { color: COLORS.muted, fontStyle: 'italic', fontWeight: '400' },
   today: { color: COLORS.goldDark, fontWeight: '800' },
+
+
+  infoRow: {
+    marginTop: 7,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+
+  infoText: {
+    flex: 1,
+    color: COLORS.muted,
+    fontSize: 14,
+    lineHeight: 20,
+  },
+
+  reviewButton: {
+    minHeight: 62,
+    paddingHorizontal: 19,
+    borderRadius: 20,
+    backgroundColor: COLORS.goldDark,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 9,
+  },
+
+  reviewButtonText: {
+    flex: 1,
+    color: '#FFFFFF',
+    fontSize: 17,
+    fontWeight: '800',
+    textAlign: 'center',
+  },
 });
