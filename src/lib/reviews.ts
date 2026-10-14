@@ -11,6 +11,7 @@ type ReviewRow = {
 };
 
 type ReviewPhotoRow = {
+  id: string;
   review_id: string;
   storage_path: string;
 };
@@ -56,7 +57,7 @@ export async function getReviewsForLocation(
 
     supabase
       .from('review_photos')
-      .select('review_id, storage_path')
+      .select('id, review_id, storage_path')
       .in('review_id', reviewIds),
 
     supabase
@@ -109,16 +110,19 @@ export async function getReviewsForLocation(
 
       return {
         reviewId: photo.review_id,
+        photoId: photo.id,
         url: data.signedUrl,
       };
     })
   );
 
   const photoUrlByReviewId = new Map<string, string>();
+  const photoIdByReviewId = new Map<string, string>();
 
   photoEntries.forEach((entry) => {
     if (entry && !photoUrlByReviewId.has(entry.reviewId)) {
       photoUrlByReviewId.set(entry.reviewId, entry.url);
+      photoIdByReviewId.set(entry.reviewId, entry.photoId);
     }
   });
 
@@ -147,6 +151,7 @@ export async function getReviewsForLocation(
     reviewText: review.review_text,
     createdAt: review.created_at,
     photoUrl: photoUrlByReviewId.get(review.id) ?? null,
+    photoId: photoIdByReviewId.get(review.id) ?? null,
     helpfulCount: helpfulCountByReviewId.get(review.id) ?? 0,
     helpfulByCurrentUser: helpfulByCurrentUser.has(review.id),
   }));
@@ -244,5 +249,49 @@ export async function setReviewHelpful(
     if (error) {
       throw error;
     }
+  }
+}
+
+export type ReportTargetType =
+  | 'review'
+  | 'review_photo';
+
+export async function reportContent(
+  targetType: ReportTargetType,
+  targetId: string,
+  reason: string
+): Promise<void> {
+  const trimmedReason = reason.trim();
+
+  if (!trimmedReason) {
+    throw new Error('Please provide a reason for the report.');
+  }
+
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
+
+  if (userError) {
+    throw userError;
+  }
+
+  if (!user) {
+    throw new Error(
+      'You must be signed in to report content.'
+    );
+  }
+
+  const { error } = await supabase
+    .from('content_reports')
+    .insert({
+      reporter_id: user.id,
+      target_type: targetType,
+      target_id: targetId,
+      reason: trimmedReason,
+    });
+
+  if (error) {
+    throw error;
   }
 }
