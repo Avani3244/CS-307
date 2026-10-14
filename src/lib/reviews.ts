@@ -15,6 +15,10 @@ type ReviewPhotoRow = {
   storage_path: string;
 };
 
+type ReviewHelpfulRow = {
+  review_id: string;
+};
+
 export async function getReviewsForLocation(
   locationId: string
 ): Promise<ReviewCardData[]> {
@@ -42,6 +46,7 @@ export async function getReviewsForLocation(
   const [
     { data: profiles, error: profilesError },
     { data: photos, error: photosError },
+    { data: helpfulMarks, error: helpfulError },
   ] = await Promise.all([
     supabase
       .from('profiles')
@@ -52,6 +57,11 @@ export async function getReviewsForLocation(
       .from('review_photos')
       .select('review_id, storage_path')
       .in('review_id', reviewIds),
+
+    supabase
+      .from('review_helpful')
+      .select('review_id')
+      .in('review_id', reviewIds),
   ]);
 
   if (profilesError) {
@@ -60,6 +70,10 @@ export async function getReviewsForLocation(
 
   if (photosError) {
     throw photosError;
+  }
+
+  if (helpfulError) {
+    throw helpfulError;
   }
 
   const usernameByUserId = new Map(
@@ -96,6 +110,15 @@ export async function getReviewsForLocation(
     }
   });
 
+  const helpfulCountByReviewId = new Map<string, number>();
+
+  ((helpfulMarks ?? []) as ReviewHelpfulRow[]).forEach((mark) => {
+    helpfulCountByReviewId.set(
+      mark.review_id,
+      (helpfulCountByReviewId.get(mark.review_id) ?? 0) + 1
+    );
+  });
+
   return reviewRows.map((review) => ({
     id: review.id,
     userId: review.user_id,
@@ -106,6 +129,7 @@ export async function getReviewsForLocation(
     reviewText: review.review_text,
     createdAt: review.created_at,
     photoUrl: photoUrlByReviewId.get(review.id) ?? null,
+    helpfulCount: helpfulCountByReviewId.get(review.id) ?? 0,
   }));
 }
 

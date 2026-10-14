@@ -23,6 +23,7 @@ export interface ReviewCardData {
   reviewText?: string | null;
   createdAt: string;
   photoUrl?: string | null;
+  helpfulCount?: number;
 }
 
 interface ReviewUpdates {
