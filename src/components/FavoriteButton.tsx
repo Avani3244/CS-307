@@ -50,6 +50,6 @@ export default function FavoriteButton({ locationId, initiallyFavorited, onChang
 
 const styles = StyleSheet.create({
   button: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
-  heart: { fontSize: 22, color: '#60646C' },
-  heartOn: { color: '#E0245E' },
+  heart: { fontSize: 26, color: '#9A816B' },
+  heartOn: { color: '#C98A38' },
 });
