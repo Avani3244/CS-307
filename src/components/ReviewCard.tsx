@@ -1,4 +1,7 @@
-import { setReviewHelpful } from '@/lib/reviews';
+import {
+  reportContent,
+  setReviewHelpful,
+} from '@/lib/reviews';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import type { ComponentProps } from 'react';
 import { useEffect, useMemo, useState } from 'react';
@@ -24,6 +27,7 @@ export interface ReviewCardData {
   reviewText?: string | null;
   createdAt: string;
   photoUrl?: string | null;
+  photoId?: string | null;
   helpfulCount?: number;
   helpfulByCurrentUser?: boolean;
 }
@@ -185,6 +189,10 @@ export default function ReviewCard({
   const [updatingHelpful, setUpdatingHelpful] =
     useState(false);
 
+  const [reporting, setReporting] =
+    useState(false);
+
+
   const [
     editOverallRating,
     setEditOverallRating,
@@ -326,6 +334,98 @@ export default function ReviewCard({
               setDeleting(false);
             }
           },
+        },
+      ]
+    );
+  };
+
+  const submitReport = async (
+    targetType: 'review' | 'review_photo',
+    targetId: string,
+    reason: string
+  ) => {
+    if (reporting) {
+      return;
+    }
+
+    try {
+      setReporting(true);
+
+      await reportContent(
+        targetType,
+        targetId,
+        reason
+      );
+
+      Alert.alert(
+        'Report submitted',
+        'Thank you. Your report has been submitted for review.'
+      );
+    } catch {
+      Alert.alert(
+        'Could not submit report',
+        'Please try again.'
+      );
+    } finally {
+      setReporting(false);
+    }
+  };
+
+  const handleReportPress = (
+    targetType: 'review' | 'review_photo'
+  ) => {
+    const targetId =
+      targetType === 'review'
+        ? review.id
+        : review.photoId;
+
+    if (!targetId) {
+      Alert.alert(
+        'Could not report',
+        'This content could not be identified.'
+      );
+      return;
+    }
+
+    const label =
+      targetType === 'review'
+        ? 'review'
+        : 'photo';
+
+    Alert.alert(
+      `Report ${label}`,
+      `Why are you reporting this ${label}?`,
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Inappropriate content',
+          onPress: () =>
+            submitReport(
+              targetType,
+              targetId,
+              'Inappropriate content'
+            ),
+        },
+        {
+          text: 'Spam or misleading',
+          onPress: () =>
+            submitReport(
+              targetType,
+              targetId,
+              'Spam or misleading'
+            ),
+        },
+        {
+          text: 'Harassment',
+          onPress: () =>
+            submitReport(
+              targetType,
+              targetId,
+              'Harassment'
+            ),
         },
       ]
     );
@@ -823,6 +923,69 @@ export default function ReviewCard({
             </Text>
           </View>
 
+          {!isOwnReview && (
+            <View style={styles.reportActions}>
+              <Pressable
+                accessibilityRole="button"
+                disabled={reporting}
+                onPress={() =>
+                  handleReportPress('review')
+                }
+                style={({ pressed }) => [
+                  styles.reportButton,
+                  reporting &&
+                  styles.disabledButton,
+                  pressed &&
+                  !reporting &&
+                  styles.pressedButton,
+                ]}
+              >
+                <MaterialCommunityIcons
+                  name="flag-outline"
+                  size={17}
+                  color={COLORS.muted}
+                />
+
+                <Text style={styles.reportButtonText}>
+                  Report Review
+                </Text>
+              </Pressable>
+
+              {!!review.photoUrl &&
+                !!review.photoId && (
+                  <Pressable
+                    accessibilityRole="button"
+                    disabled={reporting}
+                    onPress={() =>
+                      handleReportPress(
+                        'review_photo'
+                      )
+                    }
+                    style={({ pressed }) => [
+                      styles.reportButton,
+                      reporting &&
+                      styles.disabledButton,
+                      pressed &&
+                      !reporting &&
+                      styles.pressedButton,
+                    ]}
+                  >
+                    <MaterialCommunityIcons
+                      name="image-off-outline"
+                      size={17}
+                      color={COLORS.muted}
+                    />
+
+                    <Text
+                      style={styles.reportButtonText}
+                    >
+                      Report Photo
+                    </Text>
+                  </Pressable>
+                )}
+            </View>
+          )}
+
           {
             isOwnReview && (
               <View
@@ -1100,6 +1263,36 @@ const styles = StyleSheet.create({
     flexShrink: 1,
     color: COLORS.muted,
     fontSize: 12,
+  },
+
+  reportActions: {
+    marginTop: 12,
+
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'flex-end',
+    gap: 8,
+  },
+
+  reportButton: {
+    minHeight: 38,
+    paddingHorizontal: 12,
+
+    borderRadius: 13,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.card,
+
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+  },
+
+  reportButtonText: {
+    color: COLORS.muted,
+    fontSize: 12,
+    fontWeight: '700',
   },
 
   ownerActions: {
