@@ -67,6 +67,14 @@ function RootLayoutNav() {
             title: 'Write a Review',
           }}
         />
+
+        <Stack.Screen
+          name="location/[id]"
+          options={{
+            headerShown: true,
+            title: 'Location Details',
+          }}
+        />
       </Stack>
     </ThemeProvider>
   );
