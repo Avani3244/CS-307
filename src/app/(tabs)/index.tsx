@@ -9,6 +9,7 @@ import StudyLocationCard from '@/components/study-location-card';
 import { Colors } from '@/constants/theme';
 import { useAuth } from '@/context/AuthContext';
 import { listFavoriteIds } from '@/lib/favorites';
+import { matchesLocationSearch } from '@/lib/location-search';
 import {
   fetchLocations,
   getStudyLocations,
@@ -19,15 +20,18 @@ import {
 } from '@/lib/locations';
 
 import * as Location from 'expo-location';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import {
   ActivityIndicator,
   FlatList,
+  Keyboard,
   Pressable,
   RefreshControl,
+  ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   useColorScheme,
   View,
 } from 'react-native';
@@ -53,6 +57,39 @@ export default function DiscoverScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
+  const [searchText, setSearchText] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [suggestionsOpen, setSuggestionsOpen] = useState(false);
+
+  useEffect(() => {
+    const timeout = setTimeout(() => setSearchQuery(searchText.trim()), 300);
+    return () => clearTimeout(timeout);
+  }, [searchText]);
+
+  // Filter the existing results so amenity filters and nearby ordering still apply.
+  const visibleLocations = useMemo(
+    () => locations.filter((location) => matchesLocationSearch(location, searchQuery)),
+    [locations, searchQuery],
+  );
+  const suggestions = useMemo(
+    () => searchText.trim()
+      ? locations.filter((location) => matchesLocationSearch(location, searchText)).slice(0, 5)
+      : [],
+    [locations, searchText],
+  );
+
+  const clearSearch = () => {
+    setSearchText('');
+    setSearchQuery('');
+    setSuggestionsOpen(false);
+  };
+
+  const selectSuggestion = (location: DiscoverLocation) => {
+    setSearchText(location.name);
+    setSearchQuery(location.name);
+    setSuggestionsOpen(false);
+    Keyboard.dismiss();
+  };
 
   const load = useCallback(async () => {
     setError('');
@@ -185,6 +222,65 @@ export default function DiscoverScreen() {
         },
       ]}
     >
+      <View style={styles.searchWrap}>
+        <View style={[styles.searchBar, { backgroundColor: colors.backgroundElement }]}>
+          <TextInput
+            accessibilityLabel="Search study locations"
+            placeholder="Search study locations"
+            placeholderTextColor={colors.textSecondary}
+            style={[styles.searchInput, { color: colors.text }]}
+            value={searchText}
+            onChangeText={(text) => {
+              setSearchText(text);
+              setSuggestionsOpen(true);
+              if (!text.trim()) setSearchQuery('');
+            }}
+            onFocus={() => setSuggestionsOpen(true)}
+            onSubmitEditing={() => {
+              setSearchQuery(searchText.trim());
+              setSuggestionsOpen(false);
+            }}
+            autoCorrect={false}
+            autoCapitalize="none"
+            returnKeyType="search"
+          />
+          {!!searchText && (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Clear search"
+              style={styles.searchClear}
+              onPress={clearSearch}
+            >
+              <Text style={styles.searchClearText}>Clear</Text>
+            </Pressable>
+          )}
+        </View>
+        {suggestionsOpen && !loading && suggestions.length > 0 && (
+          <ScrollView
+            keyboardShouldPersistTaps="handled"
+            style={[styles.suggestions, { backgroundColor: colors.backgroundElement }]}
+          >
+            <Text style={[styles.suggestionsLabel, { color: colors.textSecondary }]}>
+              Suggested locations
+            </Text>
+            {suggestions.map((location) => (
+              <Pressable
+                key={location.id}
+                accessibilityRole="button"
+                accessibilityLabel={`Search for ${location.name}`}
+                style={styles.suggestion}
+                onPress={() => selectSuggestion(location)}
+              >
+                <Text style={{ color: colors.text }}>{location.name}</Text>
+                <Text style={[styles.cardMeta, { color: colors.textSecondary }]}>
+                  {[location.category, location.building, location.campus_area].filter(Boolean).join(' · ')}
+                </Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+        )}
+      </View>
+
       <View style={styles.controls}>
         <Pressable
           accessibilityRole="button"
@@ -255,7 +351,10 @@ export default function DiscoverScreen() {
         />
       ) : (
         <FlatList
-          data={locations}
+          data={visibleLocations}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+          onScrollBeginDrag={() => setSuggestionsOpen(false)}
           keyExtractor={(item) => item.id}
           renderItem={renderCard}
           refreshControl={
@@ -265,7 +364,7 @@ export default function DiscoverScreen() {
             />
           }
           contentContainerStyle={
-            locations.length === 0
+            visibleLocations.length === 0
               ? styles.emptyWrap
               : styles.list
           }
@@ -279,9 +378,11 @@ export default function DiscoverScreen() {
               >
                 {error
                   ? 'Study locations unavailable'
-                  : activeFilterCount > 0
-                    ? 'No study spots match your filters'
-                    : 'No study locations yet'}
+                  : searchQuery
+                    ? 'No study spots match your search'
+                    : activeFilterCount > 0
+                      ? 'No study spots match your filters'
+                      : 'No study locations yet'}
               </Text>
 
               <Text
@@ -292,9 +393,11 @@ export default function DiscoverScreen() {
               >
                 {error
                   ? 'Try again to load study locations.'
-                  : activeFilterCount > 0
-                    ? 'Try removing a filter, or clear them all to see every location.'
-                    : 'Check back later or pull down to refresh.'}
+                  : searchQuery
+                    ? `No matches for “${searchQuery}”. Try another search${activeFilterCount > 0 ? ' or remove a filter' : ''}.`
+                    : activeFilterCount > 0
+                      ? 'Try removing a filter, or clear them all to see every location.'
+                      : 'Check back later or pull down to refresh.'}
               </Text>
 
               {!!error && (
@@ -304,6 +407,12 @@ export default function DiscoverScreen() {
                   onPress={refreshLocations}
                 >
                   <Text style={styles.emptyClear}>Try again</Text>
+                </Pressable>
+              )}
+
+              {!error && !!searchQuery && (
+                <Pressable accessibilityRole="button" onPress={clearSearch}>
+                  <Text style={styles.emptyClear}>Clear search</Text>
                 </Pressable>
               )}
 
@@ -344,6 +453,56 @@ export default function DiscoverScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+
+  searchWrap: {
+    paddingHorizontal: 14,
+    paddingTop: 10,
+  },
+
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 16,
+    paddingLeft: 14,
+  },
+
+  searchInput: {
+    flex: 1,
+    minHeight: 48,
+    fontSize: 16,
+    paddingVertical: 10,
+  },
+
+  searchClear: {
+    minHeight: 48,
+    justifyContent: 'center',
+    paddingHorizontal: 14,
+  },
+
+  searchClearText: {
+    color: '#208AEF',
+    fontWeight: '600',
+  },
+
+  suggestions: {
+    maxHeight: 200,
+    marginTop: 6,
+    borderRadius: 16,
+  },
+
+  suggestionsLabel: {
+    paddingHorizontal: 14,
+    paddingTop: 10,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+
+  suggestion: {
+    minHeight: 44,
+    justifyContent: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
   },
 
   controls: {
