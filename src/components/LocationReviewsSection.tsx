@@ -24,6 +24,10 @@ type IconName =
 interface Props {
   locationId: string;
   refreshKey?: number;
+  onSummaryChange?: (summary: {
+    average: number | null;
+    count: number;
+  }) => void;
 }
 
 type ReviewSort = 'newest' | 'highest' | 'helpful';
@@ -112,6 +116,7 @@ function normalizeCategoryKey(name: string) {
 export default function LocationReviewsSection({
   locationId,
   refreshKey,
+  onSummaryChange,
 }: Props) {
   const { user } = useAuth();
 
@@ -206,6 +211,14 @@ export default function LocationReviewsSection({
 
     return total / reviews.length;
   }, [reviews]);
+
+
+  useEffect(() => {
+    onSummaryChange?.({
+      average: overallAverage,
+      count: reviews.length,
+    });
+  }, [overallAverage, reviews.length, onSummaryChange]);
 
   const categoryAverages = useMemo(() => {
     const totals: Record<

@@ -5,7 +5,7 @@ import FavoriteButton from '@/components/FavoriteButton';
 import { useAuth } from '@/context/AuthContext';
 import { listFavoriteLocations } from '@/lib/favorites';
 import type { StudyLocation } from '@/lib/locations';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import {
   ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, View,
@@ -13,6 +13,7 @@ import {
 
 export default function FavoritesScreen() {
   const { user } = useAuth();
+  const router = useRouter();
   const [favorites, setFavorites] = useState<StudyLocation[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -77,10 +78,17 @@ export default function FavoritesScreen() {
         }
         renderItem={({ item }) => (
           <View style={styles.card}>
-            <View style={{ flex: 1 }}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`View details for ${item.name}`}
+              style={{ flex: 1 }}
+              onPress={() => router.push({
+                pathname: '/location/[id]',
+                params: { id: item.id },
+              })}>
               <Text style={styles.cardName}>{item.name}</Text>
               <Text style={styles.cardMeta}>{item.category ?? 'Study spot'}</Text>
-            </View>
+            </Pressable>
             <FavoriteButton
               locationId={item.id}
               initiallyFavorited
