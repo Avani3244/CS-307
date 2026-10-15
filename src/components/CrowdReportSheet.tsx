@@ -113,7 +113,7 @@ export default function CrowdReportSheet({
     >
       <View style={styles.backdrop}>
         <View style={styles.sheet}>
-          <Text style={styles.title}>Report conditions</Text>
+          <Text style={styles.title}>Report Current Conditions</Text>
 
           {!!locationName && (
             <Text style={styles.subtitle}>{locationName}</Text>
@@ -205,78 +205,93 @@ export default function CrowdReportSheet({
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
+    backgroundColor: 'rgba(33, 22, 15, 0.45)',
     justifyContent: 'flex-end',
   },
 
   sheet: {
-    backgroundColor: '#fff',
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-    padding: 20,
-    paddingBottom: 32,
+    backgroundColor: '#FFF9F2',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    paddingHorizontal: 22,
+    paddingTop: 26,
+    paddingBottom: 36,
   },
 
   title: {
-    fontSize: 18,
-    fontWeight: '700',
+    fontSize: 25,
+    fontWeight: '900',
+    color: '#21160F',
+    letterSpacing: -0.5,
   },
 
   subtitle: {
     fontSize: 14,
-    color: '#60646C',
-    marginTop: 2,
+    fontWeight: '500',
+    color: '#9A816B',
+    marginTop: 6,
+    marginBottom: 5,
   },
 
   group: {
-    marginTop: 14,
+    marginTop: 22,
   },
 
   groupLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#60646C',
-    marginBottom: 8,
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#21160F',
+    marginBottom: 11,
   },
 
   chipRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
+    gap: 9,
   },
 
   chip: {
-    minHeight: 44,
+    flexGrow: 1,
+    minWidth: 80,
+    minHeight: 48,
     justifyContent: 'center',
-    paddingHorizontal: 16,
-    borderRadius: 22,
-    backgroundColor: '#F0F0F3',
+    alignItems: 'center',
+    paddingHorizontal: 13,
+    borderRadius: 16,
+    backgroundColor: '#F1E2D2',
+    borderWidth: 1,
+    borderColor: '#E2CCB8',
   },
 
   chipSelected: {
-    backgroundColor: '#208AEF',
+    backgroundColor: '#A96F2D',
+    borderColor: '#A96F2D',
   },
 
   chipText: {
     fontSize: 14,
-    color: '#000',
+    fontWeight: '600',
+    color: '#21160F',
+    textAlign: 'center',
   },
 
   chipTextSelected: {
-    color: '#fff',
-    fontWeight: '600',
+    color: '#FFFFFF',
+    fontWeight: '800',
   },
 
   error: {
-    marginTop: 12,
-    color: '#C62828',
+    marginTop: 14,
+    fontSize: 13,
+    color: '#A22B25',
+    fontWeight: '600',
   },
 
   submit: {
-    marginTop: 18,
-    minHeight: 48,
-    borderRadius: 12,
-    backgroundColor: '#208AEF',
+    marginTop: 26,
+    minHeight: 56,
+    borderRadius: 18,
+    backgroundColor: '#A96F2D',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -286,20 +301,22 @@ const styles = StyleSheet.create({
   },
 
   submitText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '700',
+    color: '#FFFFFF',
+    fontSize: 17,
+    fontWeight: '800',
   },
 
   cancel: {
-    marginTop: 8,
-    minHeight: 44,
+    marginTop: 10,
+    minHeight: 46,
     alignItems: 'center',
     justifyContent: 'center',
+    borderRadius: 14,
   },
 
   cancelText: {
-    color: '#60646C',
+    color: '#9A816B',
     fontSize: 15,
+    fontWeight: '700',
   },
 });
