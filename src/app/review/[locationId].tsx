@@ -1,3 +1,4 @@
+import LocationCrowdSection from '@/components/LocationCrowdSection';
 import LocationReviewsSection from '@/components/LocationReviewsSection';
 import { supabase } from '@/lib/supabase';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -462,6 +463,10 @@ export default function ReviewScreen() {
         showsVerticalScrollIndicator={false}
       >
 
+
+        {locationId !== 'Unknown location' && (
+          <LocationCrowdSection key={locationId} locationId={locationId} />
+        )}
 
         <View style={styles.sectionCard}>
           <View style={styles.sectionHeader}>

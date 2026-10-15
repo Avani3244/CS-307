@@ -1,6 +1,6 @@
 // src/lib/crowd.ts
 // Story #17: report current study-location conditions. Owner: Neha
-// Requires supabase/schema_update_sprint1_final.sql (crowd_reports table).
+// Requires supabase/schema_sprint1_additions.sql (crowd_reports table).
 
 import { supabase } from '@/lib/supabase';
 
@@ -12,6 +12,30 @@ export interface CrowdReportInput {
   crowd_level: (typeof CROWD_LEVELS)[number];
   seating_level: (typeof SEATING_LEVELS)[number];
   noise_level: (typeof NOISE_LEVELS)[number];
+}
+
+export interface CrowdReport extends CrowdReportInput {
+  id: string;
+  created_at: string;
+}
+
+/** Story #18: return only the newest report, including reports older than an hour. */
+export async function getLatestCrowdReport(locationId: string): Promise<CrowdReport | null> {
+  const { data, error } = await supabase
+    .from('crowd_reports')
+    .select('id, crowd_level, seating_level, noise_level, created_at')
+    .eq('location_id', locationId)
+    .order('created_at', { ascending: false })
+    .order('id', { ascending: false })
+    .limit(1)
+    .maybeSingle<CrowdReport>();
+
+  if (error) throw error;
+  return data;
+}
+
+export function isCrowdReportCurrent(createdAt: string, now = Date.now()): boolean {
+  return now - new Date(createdAt).getTime() <= 60 * 60 * 1000;
 }
 
 export async function submitCrowdReport(

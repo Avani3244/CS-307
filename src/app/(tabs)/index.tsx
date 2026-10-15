@@ -6,8 +6,10 @@ import FavoriteButton from '@/components/FavoriteButton';
 import FilterSheet from '@/components/FilterSheet';
 import { useAuth } from '@/context/AuthContext';
 import { listFavoriteIds } from '@/lib/favorites';
+import { matchesLocationSearch } from '@/lib/location-search';
 import {
   fetchLocations,
+  getStudyLocations,
   type Coords,
   type DiscoverLocation,
   type Filters,
@@ -17,15 +19,18 @@ import {
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { useRouter } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import {
   ActivityIndicator,
   FlatList,
+  Keyboard,
   Pressable,
   RefreshControl,
+  ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 
@@ -61,27 +66,68 @@ export default function DiscoverScreen() {
   const [nearbyMessage, setNearbyMessage] = useState('');
   const [filterSheetOpen, setFilterSheetOpen] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
+  const [searchText, setSearchText] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [suggestionsOpen, setSuggestionsOpen] = useState(false);
+
+  useEffect(() => {
+    const timeout = setTimeout(() => setSearchQuery(searchText.trim()), 300);
+    return () => clearTimeout(timeout);
+  }, [searchText]);
+
+  // Filter the existing results so amenity filters and nearby ordering still apply.
+  const visibleLocations = useMemo(
+    () => locations.filter((location) => matchesLocationSearch(location, searchQuery)),
+    [locations, searchQuery],
+  );
+  const suggestions = useMemo(
+    () => searchText.trim()
+      ? locations.filter((location) => matchesLocationSearch(location, searchText)).slice(0, 5)
+      : [],
+    [locations, searchText],
+  );
+
+  const clearSearch = () => {
+    setSearchText('');
+    setSearchQuery('');
+    setSuggestionsOpen(false);
+  };
+
+  const selectSuggestion = (location: DiscoverLocation) => {
+    setSearchText(location.name);
+    setSearchQuery(location.name);
+    setSuggestionsOpen(false);
+    Keyboard.dismiss();
+  };
 
   const load = useCallback(async () => {
     setError('');
 
     try {
       setLocations(
-        await fetchLocations({
-          filters,
-          sort,
-          coords: nearbyOn ? coords : null,
-        })
+        Object.keys(filters).length === 0 && sort === 'name' && !nearbyOn
+          ? await getStudyLocations()
+          : await fetchLocations({
+              filters,
+              sort,
+              coords: nearbyOn ? coords : null,
+            })
       );
 
       if (user) {
-        setFavoriteIds(await listFavoriteIds(user.id));
+        try {
+          setFavoriteIds(await listFavoriteIds(user.id));
+        } catch {
+          setError('Study locations loaded, but favorites could not be loaded. Pull to retry.');
+        }
       }
     } catch {
       setError('Could not load study locations. Pull to retry.');
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   }, [filters, sort, nearbyOn, coords, user]);
 
@@ -124,6 +170,8 @@ export default function DiscoverScreen() {
   };
 
   const refreshLocations = async () => {
+    if (refreshing) return;
+    setRefreshing(true);
     if (nearbyOn) {
       try {
         const position = await Location.getCurrentPositionAsync({});
@@ -134,6 +182,7 @@ export default function DiscoverScreen() {
         });
       } catch {
         setError('Could not refresh your current location.');
+        setRefreshing(false);
       }
     } else {
       await load();
@@ -214,7 +263,6 @@ export default function DiscoverScreen() {
         },
       ]}
     >
-
       <View style={styles.header}>
         <View>
           <Text style={styles.appName}>StudySpot</Text>
@@ -231,6 +279,65 @@ export default function DiscoverScreen() {
           />
         </View>
       </View>
+      <View style={styles.searchWrap}>
+        <View style={[styles.searchBar, { backgroundColor: COLORS.card }]}>
+          <TextInput
+            accessibilityLabel="Search study locations"
+            placeholder="Search study locations"
+            placeholderTextColor={COLORS.muted}
+            style={[styles.searchInput, { color: COLORS.text }]}
+            value={searchText}
+            onChangeText={(text) => {
+              setSearchText(text);
+              setSuggestionsOpen(true);
+              if (!text.trim()) setSearchQuery('');
+            }}
+            onFocus={() => setSuggestionsOpen(true)}
+            onSubmitEditing={() => {
+              setSearchQuery(searchText.trim());
+              setSuggestionsOpen(false);
+            }}
+            autoCorrect={false}
+            autoCapitalize="none"
+            returnKeyType="search"
+          />
+          {!!searchText && (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Clear search"
+              style={styles.searchClear}
+              onPress={clearSearch}
+            >
+              <Text style={styles.searchClearText}>Clear</Text>
+            </Pressable>
+          )}
+        </View>
+        {suggestionsOpen && !loading && suggestions.length > 0 && (
+          <ScrollView
+            keyboardShouldPersistTaps="handled"
+            style={[styles.suggestions, { backgroundColor: COLORS.card }]}
+          >
+            <Text style={[styles.suggestionsLabel, { color: COLORS.muted }]}>
+              Suggested locations
+            </Text>
+            {suggestions.map((location) => (
+              <Pressable
+                key={location.id}
+                accessibilityRole="button"
+                accessibilityLabel={`Search for ${location.name}`}
+                style={styles.suggestion}
+                onPress={() => selectSuggestion(location)}
+              >
+                <Text style={{ color: COLORS.text }}>{location.name}</Text>
+                <Text style={[styles.cardMeta, { color: COLORS.muted }]}>
+                  {[location.category, location.building, location.campus_area].filter(Boolean).join(' · ')}
+                </Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+        )}
+      </View>
+
       <View style={styles.controls}>
         <Pressable
           accessibilityRole="button"
@@ -311,38 +418,79 @@ export default function DiscoverScreen() {
 
       {loading ? (
         <ActivityIndicator
+          accessibilityLabel="Loading study locations"
           style={styles.loading}
           size="large"
           color={COLORS.goldDark}
         />
       ) : (
         <FlatList
-          data={locations}
+          data={visibleLocations}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+          onScrollBeginDrag={() => setSuggestionsOpen(false)}
           keyExtractor={(item) => item.id}
           renderItem={renderCard}
           refreshControl={
             <RefreshControl
-              refreshing={false}
+              refreshing={refreshing}
               onRefresh={refreshLocations}
             />
           }
           contentContainerStyle={
-            locations.length === 0
+            visibleLocations.length === 0
               ? styles.emptyWrap
               : styles.list
           }
           ListEmptyComponent={
             <View style={styles.empty}>
-              <Text style={[styles.emptyTitle, { color: COLORS.text }]}>
-                No study spots match your filters
+              <Text
+                style={[
+                  styles.emptyTitle,
+                  { color: COLORS.text },
+                ]}
+              >
+                {error
+                  ? 'Study locations unavailable'
+                  : searchQuery
+                    ? 'No study spots match your search'
+                    : activeFilterCount > 0
+                      ? 'No study spots match your filters'
+                      : 'No study locations yet'}
               </Text>
 
-              <Text style={[styles.emptyBody, { color: COLORS.muted }]}>
-                Try removing a filter, or clear them all to see every
-                location.
+              <Text
+                style={[
+                  styles.emptyBody,
+                  { color: COLORS.muted },
+                ]}
+              >
+                {error
+                  ? 'Try again to load study locations.'
+                  : searchQuery
+                    ? `No matches for “${searchQuery}”. Try another search${activeFilterCount > 0 ? ' or remove a filter' : ''}.`
+                    : activeFilterCount > 0
+                      ? 'Try removing a filter, or clear them all to see every location.'
+                      : 'Check back later or pull down to refresh.'}
               </Text>
 
-              {activeFilterCount > 0 && (
+              {!!error && (
+                <Pressable
+                  accessibilityRole="button"
+                  disabled={refreshing}
+                  onPress={refreshLocations}
+                >
+                  <Text style={styles.emptyClear}>Try again</Text>
+                </Pressable>
+              )}
+
+              {!error && !!searchQuery && (
+                <Pressable accessibilityRole="button" onPress={clearSearch}>
+                  <Text style={styles.emptyClear}>Clear search</Text>
+                </Pressable>
+              )}
+
+              {!error && activeFilterCount > 0 && (
                 <Pressable
                   accessibilityRole="button"
                   onPress={() => setFilters({})}
@@ -373,6 +521,60 @@ export default function DiscoverScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+
+  searchWrap: {
+    paddingHorizontal: 18,
+    paddingTop: 10,
+  },
+
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 23,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    paddingLeft: 14,
+  },
+
+  searchInput: {
+    flex: 1,
+    minHeight: 48,
+    fontSize: 16,
+    paddingVertical: 10,
+  },
+
+  searchClear: {
+    minHeight: 48,
+    justifyContent: 'center',
+    paddingHorizontal: 14,
+  },
+
+  searchClearText: {
+    color: COLORS.goldDark,
+    fontWeight: '600',
+  },
+
+  suggestions: {
+    maxHeight: 200,
+    marginTop: 6,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+
+  suggestionsLabel: {
+    paddingHorizontal: 14,
+    paddingTop: 10,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+
+  suggestion: {
+    minHeight: 44,
+    justifyContent: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
   },
 
   controls: {
