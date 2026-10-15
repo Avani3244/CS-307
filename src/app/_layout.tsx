@@ -62,9 +62,14 @@ function RootLayoutNav() {
 
         <Stack.Screen
           name="review/[locationId]"
+          options={{ headerShown: false }}
+        />
+
+        <Stack.Screen
+          name="location/[id]"
           options={{
             headerShown: true,
-            title: 'Write a Review',
+            title: 'Location Details',
           }}
         />
       </Stack>

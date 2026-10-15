@@ -1,3 +1,7 @@
+import {
+  reportContent,
+  setReviewHelpful,
+} from '@/lib/reviews';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import type { ComponentProps } from 'react';
 import { useEffect, useMemo, useState } from 'react';
@@ -23,6 +27,9 @@ export interface ReviewCardData {
   reviewText?: string | null;
   createdAt: string;
   photoUrl?: string | null;
+  photoId?: string | null;
+  helpfulCount?: number;
+  helpfulByCurrentUser?: boolean;
 }
 
 interface ReviewUpdates {
@@ -170,6 +177,22 @@ export default function ReviewCard({
   const [saving, setSaving] =
     useState(false);
 
+
+  const [helpful, setHelpful] = useState(
+    review.helpfulByCurrentUser ?? false
+  );
+
+  const [helpfulCount, setHelpfulCount] = useState(
+    review.helpfulCount ?? 0
+  );
+
+  const [updatingHelpful, setUpdatingHelpful] =
+    useState(false);
+
+  const [reporting, setReporting] =
+    useState(false);
+
+
   const [
     editOverallRating,
     setEditOverallRating,
@@ -202,6 +225,14 @@ export default function ReviewCard({
       );
     }
   }, [review, editing]);
+
+  useEffect(() => {
+    setHelpful(review.helpfulByCurrentUser ?? false);
+    setHelpfulCount(review.helpfulCount ?? 0);
+  }, [
+    review.helpfulByCurrentUser,
+    review.helpfulCount,
+  ]);
 
   const displayCategories = useMemo(() => {
     if (!review.categoryRatings) {
@@ -239,6 +270,39 @@ export default function ReviewCard({
       });
   }, [review.categoryRatings]);
 
+  const handleHelpfulPress = async () => {
+    if (updatingHelpful || isOwnReview) {
+      return;
+    }
+
+    const nextHelpful = !helpful;
+
+    try {
+      setUpdatingHelpful(true);
+
+      await setReviewHelpful(
+        review.id,
+        nextHelpful
+      );
+
+      setHelpful(nextHelpful);
+
+      setHelpfulCount((current) =>
+        Math.max(
+          0,
+          current + (nextHelpful ? 1 : -1)
+        )
+      );
+    } catch {
+      Alert.alert(
+        'Could not update Helpful',
+        'Please try again.'
+      );
+    } finally {
+      setUpdatingHelpful(false);
+    }
+  };
+
   const handleDeletePress = () => {
     Alert.alert(
       'Delete review?',
@@ -270,6 +334,98 @@ export default function ReviewCard({
               setDeleting(false);
             }
           },
+        },
+      ]
+    );
+  };
+
+  const submitReport = async (
+    targetType: 'review' | 'review_photo',
+    targetId: string,
+    reason: string
+  ) => {
+    if (reporting) {
+      return;
+    }
+
+    try {
+      setReporting(true);
+
+      await reportContent(
+        targetType,
+        targetId,
+        reason
+      );
+
+      Alert.alert(
+        'Report submitted',
+        'Thank you. Your report has been submitted for review.'
+      );
+    } catch {
+      Alert.alert(
+        'Could not submit report',
+        'Please try again.'
+      );
+    } finally {
+      setReporting(false);
+    }
+  };
+
+  const handleReportPress = (
+    targetType: 'review' | 'review_photo'
+  ) => {
+    const targetId =
+      targetType === 'review'
+        ? review.id
+        : review.photoId;
+
+    if (!targetId) {
+      Alert.alert(
+        'Could not report',
+        'This content could not be identified.'
+      );
+      return;
+    }
+
+    const label =
+      targetType === 'review'
+        ? 'review'
+        : 'photo';
+
+    Alert.alert(
+      `Report ${label}`,
+      `Why are you reporting this ${label}?`,
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Inappropriate content',
+          onPress: () =>
+            submitReport(
+              targetType,
+              targetId,
+              'Inappropriate content'
+            ),
+        },
+        {
+          text: 'Spam or misleading',
+          onPress: () =>
+            submitReport(
+              targetType,
+              targetId,
+              'Spam or misleading'
+            ),
+        },
+        {
+          text: 'Harassment',
+          onPress: () =>
+            submitReport(
+              targetType,
+              targetId,
+              'Harassment'
+            ),
         },
       ]
     );
@@ -446,16 +602,16 @@ export default function ReviewCard({
                   style={[
                     styles.ratingOption,
                     editOverallRating ===
-                      rating &&
-                      styles.ratingOptionSelected,
+                    rating &&
+                    styles.ratingOptionSelected,
                   ]}
                 >
                   <Text
                     style={[
                       styles.ratingOptionText,
                       editOverallRating ===
-                        rating &&
-                        styles.ratingOptionTextSelected,
+                      rating &&
+                      styles.ratingOptionTextSelected,
                     ]}
                   >
                     {rating}
@@ -468,94 +624,94 @@ export default function ReviewCard({
           {Object.keys(
             editCategoryRatings
           ).length > 0 && (
-            <View
-              style={
-                styles.editCategories
-              }
-            >
-              {Object.entries(
-                editCategoryRatings
-              ).map(
-                ([
-                  category,
-                  selectedRating,
-                ]) => (
-                  <View
-                    key={category}
-                    style={
-                      styles.editCategoryBlock
-                    }
-                  >
+              <View
+                style={
+                  styles.editCategories
+                }
+              >
+                {Object.entries(
+                  editCategoryRatings
+                ).map(
+                  ([
+                    category,
+                    selectedRating,
+                  ]) => (
                     <View
+                      key={category}
                       style={
-                        styles.editCategoryLabelRow
+                        styles.editCategoryBlock
                       }
                     >
-                      <MaterialCommunityIcons
-                        name={getCategoryIcon(
-                          category
-                        )}
-                        size={18}
-                        color={
-                          COLORS.icon
-                        }
-                      />
-
-                      <Text
+                      <View
                         style={
-                          styles.editLabel
+                          styles.editCategoryLabelRow
                         }
                       >
-                        {formatCategoryName(
-                          category
-                        )}
-                      </Text>
-                    </View>
+                        <MaterialCommunityIcons
+                          name={getCategoryIcon(
+                            category
+                          )}
+                          size={18}
+                          color={
+                            COLORS.icon
+                          }
+                        />
 
-                    <View
-                      style={
-                        styles.ratingSelector
-                      }
-                    >
-                      {ratingOptions.map(
-                        (rating) => (
-                          <Pressable
-                            key={
-                              rating
-                            }
-                            accessibilityRole="button"
-                            onPress={() =>
-                              handleCategoryRatingChange(
-                                category,
+                        <Text
+                          style={
+                            styles.editLabel
+                          }
+                        >
+                          {formatCategoryName(
+                            category
+                          )}
+                        </Text>
+                      </View>
+
+                      <View
+                        style={
+                          styles.ratingSelector
+                        }
+                      >
+                        {ratingOptions.map(
+                          (rating) => (
+                            <Pressable
+                              key={
                                 rating
-                              )
-                            }
-                            style={[
-                              styles.smallRatingOption,
-                              selectedRating ===
+                              }
+                              accessibilityRole="button"
+                              onPress={() =>
+                                handleCategoryRatingChange(
+                                  category,
+                                  rating
+                                )
+                              }
+                              style={[
+                                styles.smallRatingOption,
+                                selectedRating ===
                                 rating &&
                                 styles.ratingOptionSelected,
-                            ]}
-                          >
-                            <Text
-                              style={[
-                                styles.ratingOptionText,
-                                selectedRating ===
-                                  rating &&
-                                  styles.ratingOptionTextSelected,
                               ]}
                             >
-                              {rating}
-                            </Text>
-                          </Pressable>
-                        )
-                      )}
+                              <Text
+                                style={[
+                                  styles.ratingOptionText,
+                                  selectedRating ===
+                                  rating &&
+                                  styles.ratingOptionTextSelected,
+                                ]}
+                              >
+                                {rating}
+                              </Text>
+                            </Pressable>
+                          )
+                        )}
+                      </View>
                     </View>
-                  </View>
-                )
-              )}
-            </View>
-          )}
+                  )
+                )}
+              </View>
+            )}
 
           <Text style={styles.editLabel}>
             Review
@@ -621,7 +777,7 @@ export default function ReviewCard({
               style={[
                 styles.saveButton,
                 saving &&
-                  styles.disabledButton,
+                styles.disabledButton,
               ]}
             >
               <MaterialCommunityIcons
@@ -644,50 +800,50 @@ export default function ReviewCard({
         <>
           {displayCategories.length >
             0 && (
-            <View
-              style={styles.categories}
-            >
-              {displayCategories.map(
-                ({
-                  name,
-                  rating,
-                }) => (
-                  <View
-                    key={name}
-                    style={
-                      styles.categoryChip
-                    }
-                  >
-                    <MaterialCommunityIcons
-                      name={getCategoryIcon(
-                        name
-                      )}
-                      size={18}
-                      color={COLORS.icon}
-                    />
-
-                    <Text
+              <View
+                style={styles.categories}
+              >
+                {displayCategories.map(
+                  ({
+                    name,
+                    rating,
+                  }) => (
+                    <View
+                      key={name}
                       style={
-                        styles.categoryName
+                        styles.categoryChip
                       }
                     >
-                      {formatCategoryName(
-                        name
-                      )}
-                    </Text>
+                      <MaterialCommunityIcons
+                        name={getCategoryIcon(
+                          name
+                        )}
+                        size={18}
+                        color={COLORS.icon}
+                      />
 
-                    <Text
-                      style={
-                        styles.categoryRating
-                      }
-                    >
-                      {rating}/5
-                    </Text>
-                  </View>
-                )
-              )}
-            </View>
-          )}
+                      <Text
+                        style={
+                          styles.categoryName
+                        }
+                      >
+                        {formatCategoryName(
+                          name
+                        )}
+                      </Text>
+
+                      <Text
+                        style={
+                          styles.categoryRating
+                        }
+                      >
+                        {rating}/5
+                      </Text>
+                    </View>
+                  )
+                )}
+              </View>
+            )}
 
           {!!review.reviewText && (
             <View
@@ -717,76 +873,192 @@ export default function ReviewCard({
             </View>
           )}
 
-          {isOwnReview && (
-            <View
-              style={styles.ownerActions}
-            >
-              {onEditReview && (
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={
-                    handleEditPress
+          <View style={styles.helpfulRow}>
+            {!isOwnReview && (
+              <Pressable
+                accessibilityRole="button"
+                disabled={updatingHelpful}
+                onPress={handleHelpfulPress}
+                style={({ pressed }) => [
+                  styles.helpfulButton,
+                  helpful &&
+                  styles.helpfulButtonSelected,
+                  updatingHelpful &&
+                  styles.disabledButton,
+                  pressed &&
+                  !updatingHelpful &&
+                  styles.pressedButton,
+                ]}
+              >
+                <MaterialCommunityIcons
+                  name={
+                    helpful
+                      ? 'thumb-up'
+                      : 'thumb-up-outline'
                   }
-                  style={({ pressed }) => [
-                    styles.editButton,
-                    pressed &&
-                      styles.pressedButton,
+                  size={18}
+                  color={
+                    helpful
+                      ? COLORS.white
+                      : COLORS.goldDark
+                  }
+                />
+
+                <Text
+                  style={[
+                    styles.helpfulButtonText,
+                    helpful &&
+                    styles.helpfulButtonTextSelected,
                   ]}
                 >
-                  <MaterialCommunityIcons
-                    name="pencil-outline"
-                    size={18}
-                    color={COLORS.text}
-                  />
+                  Helpful
+                </Text>
+              </Pressable>
+            )}
 
-                  <Text
-                    style={
-                      styles.editButtonText
+            <Text style={styles.helpfulCountText}>
+              {helpfulCount === 1
+                ? '1 person found this helpful'
+                : `${helpfulCount} people found this helpful`}
+            </Text>
+          </View>
+
+          {!isOwnReview && (
+            <View style={styles.reportActions}>
+              <Pressable
+                accessibilityRole="button"
+                disabled={reporting}
+                onPress={() =>
+                  handleReportPress('review')
+                }
+                style={({ pressed }) => [
+                  styles.reportButton,
+                  reporting &&
+                  styles.disabledButton,
+                  pressed &&
+                  !reporting &&
+                  styles.pressedButton,
+                ]}
+              >
+                <MaterialCommunityIcons
+                  name="flag-outline"
+                  size={17}
+                  color={COLORS.muted}
+                />
+
+                <Text style={styles.reportButtonText}>
+                  Report Review
+                </Text>
+              </Pressable>
+
+              {!!review.photoUrl &&
+                !!review.photoId && (
+                  <Pressable
+                    accessibilityRole="button"
+                    disabled={reporting}
+                    onPress={() =>
+                      handleReportPress(
+                        'review_photo'
+                      )
                     }
-                  >
-                    Edit
-                  </Text>
-                </Pressable>
-              )}
-
-              {onDeleteReview && (
-                <Pressable
-                  accessibilityRole="button"
-                  disabled={deleting}
-                  onPress={
-                    handleDeletePress
-                  }
-                  style={({ pressed }) => [
-                    styles.deleteButton,
-                    deleting &&
+                    style={({ pressed }) => [
+                      styles.reportButton,
+                      reporting &&
                       styles.disabledButton,
-                    pressed &&
-                      !deleting &&
+                      pressed &&
+                      !reporting &&
                       styles.pressedButton,
-                  ]}
-                >
-                  <MaterialCommunityIcons
-                    name="trash-can-outline"
-                    size={18}
-                    color={COLORS.delete}
-                  />
-
-                  <Text
-                    style={
-                      styles.deleteText
-                    }
+                    ]}
                   >
-                    {deleting
-                      ? 'Deleting...'
-                      : 'Delete'}
-                  </Text>
-                </Pressable>
-              )}
+                    <MaterialCommunityIcons
+                      name="image-off-outline"
+                      size={17}
+                      color={COLORS.muted}
+                    />
+
+                    <Text
+                      style={styles.reportButtonText}
+                    >
+                      Report Photo
+                    </Text>
+                  </Pressable>
+                )}
             </View>
           )}
+
+          {
+            isOwnReview && (
+              <View
+                style={styles.ownerActions}
+              >
+                {onEditReview && (
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={
+                      handleEditPress
+                    }
+                    style={({ pressed }) => [
+                      styles.editButton,
+                      pressed &&
+                      styles.pressedButton,
+                    ]}
+                  >
+                    <MaterialCommunityIcons
+                      name="pencil-outline"
+                      size={18}
+                      color={COLORS.text}
+                    />
+
+                    <Text
+                      style={
+                        styles.editButtonText
+                      }
+                    >
+                      Edit
+                    </Text>
+                  </Pressable>
+                )}
+
+                {onDeleteReview && (
+                  <Pressable
+                    accessibilityRole="button"
+                    disabled={deleting}
+                    onPress={
+                      handleDeletePress
+                    }
+                    style={({ pressed }) => [
+                      styles.deleteButton,
+                      deleting &&
+                      styles.disabledButton,
+                      pressed &&
+                      !deleting &&
+                      styles.pressedButton,
+                    ]}
+                  >
+                    <MaterialCommunityIcons
+                      name="trash-can-outline"
+                      size={18}
+                      color={COLORS.delete}
+                    />
+
+                    <Text
+                      style={
+                        styles.deleteText
+                      }
+                    >
+                      {deleting
+                        ? 'Deleting...'
+                        : 'Delete'}
+                    </Text>
+                  </Pressable>
+                )}
+              </View>
+            )
+          }
         </>
-      )}
-    </View>
+      )
+      }
+    </View >
   );
 }
 
@@ -945,6 +1217,82 @@ const styles = StyleSheet.create({
   photo: {
     width: '100%',
     height: 220,
+  },
+
+  helpfulRow: {
+    marginTop: 16,
+
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+
+  helpfulButton: {
+    minHeight: 40,
+    paddingHorizontal: 14,
+
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: COLORS.gold,
+    backgroundColor: COLORS.cardSoft,
+
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+
+  helpfulButtonSelected: {
+    backgroundColor: COLORS.goldDark,
+    borderColor: COLORS.goldDark,
+  },
+
+  helpfulButtonText: {
+    color: COLORS.goldDark,
+    fontSize: 13,
+    fontWeight: '800',
+  },
+
+  helpfulButtonTextSelected: {
+    color: COLORS.white,
+  },
+
+  helpfulCountText: {
+    flexShrink: 1,
+    color: COLORS.muted,
+    fontSize: 12,
+  },
+
+  reportActions: {
+    marginTop: 12,
+
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'flex-end',
+    gap: 8,
+  },
+
+  reportButton: {
+    minHeight: 38,
+    paddingHorizontal: 12,
+
+    borderRadius: 13,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.card,
+
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+  },
+
+  reportButtonText: {
+    color: COLORS.muted,
+    fontSize: 12,
+    fontWeight: '700',
   },
 
   ownerActions: {

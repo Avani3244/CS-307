@@ -24,7 +24,13 @@ type IconName =
 interface Props {
   locationId: string;
   refreshKey?: number;
+  onSummaryChange?: (summary: {
+    average: number | null;
+    count: number;
+  }) => void;
 }
+
+type ReviewSort = 'newest' | 'highest' | 'helpful';
 
 const COLORS = {
   card: '#FFF9F2',
@@ -110,6 +116,7 @@ function normalizeCategoryKey(name: string) {
 export default function LocationReviewsSection({
   locationId,
   refreshKey,
+  onSummaryChange,
 }: Props) {
   const { user } = useAuth();
 
@@ -119,6 +126,9 @@ export default function LocationReviewsSection({
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
+
+  const [sortBy, setSortBy] =
+    useState<ReviewSort>('newest');
 
   const loadReviews = useCallback(
     async (isRefresh = false) => {
@@ -202,6 +212,14 @@ export default function LocationReviewsSection({
     return total / reviews.length;
   }, [reviews]);
 
+
+  useEffect(() => {
+    onSummaryChange?.({
+      average: overallAverage,
+      count: reviews.length,
+    });
+  }, [overallAverage, reviews.length, onSummaryChange]);
+
   const categoryAverages = useMemo(() => {
     const totals: Record<
       string,
@@ -240,6 +258,47 @@ export default function LocationReviewsSection({
         totals[category].count,
     }));
   }, [reviews]);
+
+
+  const sortedReviews = useMemo(() => {
+    const sorted = [...reviews];
+
+    if (sortBy === 'highest') {
+      return sorted.sort((a, b) => {
+        if (b.overallRating !== a.overallRating) {
+          return b.overallRating - a.overallRating;
+        }
+
+        return (
+          new Date(b.createdAt).getTime() -
+          new Date(a.createdAt).getTime()
+        );
+      });
+    }
+
+    if (sortBy === 'helpful') {
+      return sorted.sort((a, b) => {
+        const helpfulDifference =
+          (b.helpfulCount ?? 0) -
+          (a.helpfulCount ?? 0);
+
+        if (helpfulDifference !== 0) {
+          return helpfulDifference;
+        }
+
+        return (
+          new Date(b.createdAt).getTime() -
+          new Date(a.createdAt).getTime()
+        );
+      });
+    }
+
+    return sorted.sort(
+      (a, b) =>
+        new Date(b.createdAt).getTime() -
+        new Date(a.createdAt).getTime()
+    );
+  }, [reviews, sortBy]);
 
   if (loading) {
     return (
@@ -296,10 +355,10 @@ export default function LocationReviewsSection({
           style={({ pressed }) => [
             styles.refreshButton,
             refreshing &&
-              styles.refreshButtonDisabled,
+            styles.refreshButtonDisabled,
             pressed &&
-              !refreshing &&
-              styles.buttonPressed,
+            !refreshing &&
+            styles.buttonPressed,
           ]}
         >
           <MaterialCommunityIcons
@@ -410,8 +469,59 @@ export default function LocationReviewsSection({
         </View>
       )}
 
+      <View style={styles.sortSection}>
+        <Text style={styles.sortLabel}>
+          Sort reviews
+        </Text>
+
+        <View style={styles.sortRow}>
+          {(
+            [
+              {
+                key: 'newest',
+                label: 'Newest',
+              },
+              {
+                key: 'highest',
+                label: 'Highest Rated',
+              },
+              {
+                key: 'helpful',
+                label: 'Most Helpful',
+              },
+            ] as const
+          ).map(({ key, label }) => {
+            const selected = sortBy === key;
+
+            return (
+              <Pressable
+                key={key}
+                accessibilityRole="button"
+                onPress={() => setSortBy(key)}
+                style={({ pressed }) => [
+                  styles.sortButton,
+                  selected &&
+                  styles.sortButtonSelected,
+                  pressed && styles.buttonPressed,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.sortButtonText,
+                    selected &&
+                    styles.sortButtonTextSelected,
+                  ]}
+                >
+                  {label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      </View>
+
       <ReviewList
-        reviews={reviews}
+        reviews={sortedReviews}
         currentUserId={user?.id}
         onDeleteReview={handleDeleteReview}
         onEditReview={handleEditReview}
@@ -633,6 +743,57 @@ const styles = StyleSheet.create({
     marginTop: 3,
     color: COLORS.text,
     fontSize: 16,
+    fontWeight: '900',
+  },
+
+  sortSection: {
+    marginHorizontal: 16,
+    marginTop: 4,
+    marginBottom: 10,
+  },
+
+  sortLabel: {
+    marginBottom: 8,
+    color: COLORS.muted,
+    fontSize: 12,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+    letterSpacing: 0.7,
+  },
+
+  sortRow: {
+    flexDirection: 'row',
+    gap: 7,
+  },
+
+  sortButton: {
+    flex: 1,
+    minHeight: 42,
+    paddingHorizontal: 6,
+
+    borderRadius: 15,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.card,
+
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  sortButtonSelected: {
+    borderColor: COLORS.goldDark,
+    backgroundColor: '#F4DFC3',
+  },
+
+  sortButtonText: {
+    color: COLORS.muted,
+    fontSize: 11,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+
+  sortButtonTextSelected: {
+    color: COLORS.text,
     fontWeight: '900',
   },
 });

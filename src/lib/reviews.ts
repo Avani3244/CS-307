@@ -11,8 +11,14 @@ type ReviewRow = {
 };
 
 type ReviewPhotoRow = {
+  id: string;
   review_id: string;
   storage_path: string;
+};
+
+type ReviewHelpfulRow = {
+  review_id: string;
+  user_id: string;
 };
 
 export async function getReviewsForLocation(
@@ -42,6 +48,7 @@ export async function getReviewsForLocation(
   const [
     { data: profiles, error: profilesError },
     { data: photos, error: photosError },
+    { data: helpfulMarks, error: helpfulError },
   ] = await Promise.all([
     supabase
       .from('profiles')
@@ -50,7 +57,12 @@ export async function getReviewsForLocation(
 
     supabase
       .from('review_photos')
-      .select('review_id, storage_path')
+      .select('id, review_id, storage_path')
+      .in('review_id', reviewIds),
+
+    supabase
+      .from('review_helpful')
+      .select('review_id, user_id')
       .in('review_id', reviewIds),
   ]);
 
@@ -61,6 +73,21 @@ export async function getReviewsForLocation(
   if (photosError) {
     throw photosError;
   }
+
+  if (helpfulError) {
+    throw helpfulError;
+  }
+
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
+
+  if (userError) {
+    throw userError;
+  }
+
+  const currentUserId = user?.id ?? null;
 
   const usernameByUserId = new Map(
     (profiles ?? []).map((profile) => [
@@ -83,18 +110,36 @@ export async function getReviewsForLocation(
 
       return {
         reviewId: photo.review_id,
+        photoId: photo.id,
         url: data.signedUrl,
       };
     })
   );
 
   const photoUrlByReviewId = new Map<string, string>();
+  const photoIdByReviewId = new Map<string, string>();
 
   photoEntries.forEach((entry) => {
     if (entry && !photoUrlByReviewId.has(entry.reviewId)) {
       photoUrlByReviewId.set(entry.reviewId, entry.url);
+      photoIdByReviewId.set(entry.reviewId, entry.photoId);
     }
   });
+
+  const helpfulCountByReviewId = new Map<string, number>();
+
+  ((helpfulMarks ?? []) as ReviewHelpfulRow[]).forEach((mark) => {
+    helpfulCountByReviewId.set(
+      mark.review_id,
+      (helpfulCountByReviewId.get(mark.review_id) ?? 0) + 1
+    );
+  });
+
+  const helpfulByCurrentUser = new Set<string>(
+    ((helpfulMarks ?? []) as ReviewHelpfulRow[])
+      .filter((mark) => mark.user_id === currentUserId)
+      .map((mark) => mark.review_id)
+  );
 
   return reviewRows.map((review) => ({
     id: review.id,
@@ -106,6 +151,9 @@ export async function getReviewsForLocation(
     reviewText: review.review_text,
     createdAt: review.created_at,
     photoUrl: photoUrlByReviewId.get(review.id) ?? null,
+    photoId: photoIdByReviewId.get(review.id) ?? null,
+    helpfulCount: helpfulCountByReviewId.get(review.id) ?? 0,
+    helpfulByCurrentUser: helpfulByCurrentUser.has(review.id),
   }));
 }
 
@@ -159,6 +207,89 @@ export async function updateReview(
       review_text: updates.reviewText.trim() || null,
     })
     .eq('id', reviewId);
+
+  if (error) {
+    throw error;
+  }
+}
+
+export async function setReviewHelpful(
+  reviewId: string,
+  helpful: boolean
+): Promise<void> {
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
+
+  if (userError) {
+    throw userError;
+  }
+
+  if (!user) {
+    throw new Error('You must be signed in to mark a review as helpful.');
+  }
+
+  if (helpful) {
+    const { error } = await supabase.from('review_helpful').insert({
+      review_id: reviewId,
+      user_id: user.id,
+    });
+
+    if (error) {
+      throw error;
+    }
+  } else {
+    const { error } = await supabase
+      .from('review_helpful')
+      .delete()
+      .eq('review_id', reviewId)
+      .eq('user_id', user.id);
+
+    if (error) {
+      throw error;
+    }
+  }
+}
+
+export type ReportTargetType =
+  | 'review'
+  | 'review_photo';
+
+export async function reportContent(
+  targetType: ReportTargetType,
+  targetId: string,
+  reason: string
+): Promise<void> {
+  const trimmedReason = reason.trim();
+
+  if (!trimmedReason) {
+    throw new Error('Please provide a reason for the report.');
+  }
+
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
+
+  if (userError) {
+    throw userError;
+  }
+
+  if (!user) {
+    throw new Error(
+      'You must be signed in to report content.'
+    );
+  }
+
+  const { error } = await supabase
+    .from('content_reports')
+    .insert({
+      reporter_id: user.id,
+      target_type: targetType,
+      target_id: targetId,
+      reason: trimmedReason,
+    });
 
   if (error) {
     throw error;
