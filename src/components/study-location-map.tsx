@@ -1,3 +1,4 @@
+import { useRouter } from 'expo-router';
 import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import MapView, { Callout, Marker } from 'react-native-maps';
 
@@ -17,6 +18,7 @@ const PURDUE_REGION = {
 };
 
 export default function StudyLocationMap({ locations }: Props) {
+  const router = useRouter();
   const { width } = useWindowDimensions();
   const calloutWidth = Math.min(260, width - 64);
   return (
@@ -43,7 +45,12 @@ export default function StudyLocationMap({ locations }: Props) {
             title={location.name}
             description={[location.category, location.address, ratingText].filter(Boolean).join(' · ')}
           >
-            <Callout>
+            <Callout
+              onPress={() => router.push({
+                pathname: '/location/[id]',
+                params: { id: location.id },
+              })}
+            >
               <View style={[styles.callout, { width: calloutWidth }]}>
                 <Text style={styles.name}>{location.name}</Text>
                 <Text style={styles.detail}>
