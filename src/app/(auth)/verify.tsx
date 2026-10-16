@@ -14,6 +14,8 @@ export default function VerifyScreen() {
   const { link, checked, lastUrl } = useAuthLink();
   // The link object we last acted on (identity check, so a new link is not ignored).
   const processed = useRef<AuthLinkData | null>(null);
+  // Set once a valid link has confirmed the email; nothing after that may undo it.
+  const succeeded = useRef(false);
   const [status, setStatus] = useState<Status>('checking');
   const [message, setMessage] = useState('');
 
@@ -30,13 +32,20 @@ export default function VerifyScreen() {
 
     if (processed.current === link) return;
     processed.current = link;
+    clearAuthLink();
+
+    // The same link can reach the app more than once (the browser or mail app
+    // re-opens it). The first one redeems the token and later copies come back as
+    // "expired", so an error after a success must not replace the success screen.
+    if (succeeded.current) return;
+
     if (link.errorCode || !link.accessToken) {
       setMessage(`${describeLinkError(link)} Create your account again or sign in to request a new verification email.`);
       setStatus('invalid');
     } else {
+      succeeded.current = true;
       setStatus('verified');
     }
-    clearAuthLink();
   }, [link, checked]);
 
   if (status === 'checking') {
