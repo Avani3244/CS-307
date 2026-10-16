@@ -11,6 +11,7 @@ import {
   NOT_AVAILABLE,
   type LocationDetail,
 } from '@/lib/location-detail';
+import CompareButton from '@/components/CompareButton';
 import { isLocationOpen } from '@/lib/location-hours';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
@@ -214,6 +215,12 @@ export default function LocationDetailScreen() {
             {formatOptionalText(location.campus_area)}
           </Text>
         </View>
+
+        <CompareButton
+          locationId={location.id}
+          locationName={location.name}
+          variant="row"
+        />
       </View>
 
       <Section title="About">

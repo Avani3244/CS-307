@@ -2,6 +2,8 @@
 // Host screen for Neha's stories #9 (filter/sort), #7 (nearby),
 // #12 (favorites), #17 (crowd reports).
 
+import CompareControl from '@/components/CompareControl';
+import CompareButton from '@/components/CompareButton';
 import FavoriteButton from '@/components/FavoriteButton';
 import FilterSheet from '@/components/FilterSheet';
 import { useAuth } from '@/context/AuthContext';
@@ -246,10 +248,13 @@ export default function DiscoverScreen() {
         </Pressable>
       </View>
 
-      <FavoriteButton
-        locationId={item.id}
-        initiallyFavorited={favoriteIds.has(item.id)}
-      />
+      <View style={styles.cardActions}>
+        <FavoriteButton
+          locationId={item.id}
+          initiallyFavorited={favoriteIds.has(item.id)}
+        />
+        <CompareButton locationId={item.id} locationName={item.name} />
+      </View>
     </View>
   );
 
@@ -399,6 +404,8 @@ export default function DiscoverScreen() {
             </Text>
           </View>
         </Pressable>
+
+        <CompareControl />
       </View>
 
       {!!nearbyMessage && (
@@ -579,6 +586,7 @@ const styles = StyleSheet.create({
 
   controls: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 10,
     paddingHorizontal: 18,
     paddingTop: 10,
@@ -650,6 +658,10 @@ const styles = StyleSheet.create({
 
   cardContent: {
     flex: 1,
+  },
+
+  cardActions: {
+    alignItems: 'center',
   },
 
   cardMain: {

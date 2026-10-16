@@ -22,6 +22,9 @@ export default function ResetPasswordScreen() {
   // The link object we last acted on. Compared by identity so a *new* link sent
   // to a screen that is already open is processed instead of being ignored.
   const processed = useRef<AuthLinkData | null>(null);
+  // True once a reset link has been accepted, so a repeat delivery of the same
+  // link (which comes back "expired") can't replace the new-password form.
+  const recovering = useRef(false);
 
   const [status, setStatus] = useState<Status>('checking');
   const [linkMessage, setLinkMessage] = useState('');
@@ -45,6 +48,7 @@ export default function ResetPasswordScreen() {
     if (processed.current === link) return;
     processed.current = link;
     clearAuthLink();
+    if (recovering.current) return;
     setStatus('checking');
 
     if (link.errorCode || !link.accessToken || !link.refreshToken) {
@@ -53,8 +57,10 @@ export default function ResetPasswordScreen() {
       return;
     }
 
+    recovering.current = true;
     beginRecovery(link.accessToken, link.refreshToken).then(({ error }) => {
       if (error) {
+        recovering.current = false;
         setLinkMessage('This link is invalid or has expired.');
         setStatus('invalid');
       } else {
