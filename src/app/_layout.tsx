@@ -12,6 +12,7 @@ import { ActivityIndicator, useColorScheme, View } from 'react-native';
 
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
+import { CompareProvider } from '@/context/CompareContext';
 import '@/lib/auth-links'; // start listening for email deep links immediately
 
 SplashScreen.preventAutoHideAsync();
@@ -72,6 +73,14 @@ function RootLayoutNav() {
             title: 'Location Details',
           }}
         />
+
+        <Stack.Screen
+          name="compare"
+          options={{
+            headerShown: true,
+            title: 'Compare',
+          }}
+        />
       </Stack>
     </ThemeProvider>
   );
@@ -80,7 +89,9 @@ function RootLayoutNav() {
 export default function RootLayout() {
   return (
     <AuthProvider>
-      <RootLayoutNav />
+      <CompareProvider>
+        <RootLayoutNav />
+      </CompareProvider>
     </AuthProvider>
   );
 }
