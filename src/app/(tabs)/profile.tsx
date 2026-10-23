@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  Modal,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -35,6 +36,8 @@ const COLORS = {
   white: '#FFFFFF',
   delete: '#A22B25',
   deleteBackground: '#F9DDD7',
+  success: '#2E7D32',
+  successBackground: '#E8F5E9',
   star: '#E6A122',
   heart: '#D9534F',
 };
@@ -42,6 +45,7 @@ const COLORS = {
 const STUDY_STYLES = ['Quiet / Solo', 'Group Study', 'Coffee Shops', 'Late Night', 'Natural Light'];
 
 type FilterType = 'all' | 'reviews' | 'favorites';
+type FriendsTab = 'friends' | 'requests' | 'add';
 
 export interface FeedActivityItem {
   id: string;
@@ -52,6 +56,23 @@ export interface FeedActivityItem {
   location_category: string;
   rating?: number;
   comment?: string;
+}
+
+export interface FriendProfile {
+  user_id: string;
+  username: string;
+  full_name: string | null;
+  major: string | null;
+  avatar_url: string | null;
+}
+
+export interface FriendshipEntry {
+  friendship_id: string;
+  status: 'pending' | 'accepted' | 'declined';
+  sender_id: string;
+  receiver_id: string;
+  created_at: string;
+  friend: FriendProfile;
 }
 
 function formatRelativeTime(dateIso: string) {
@@ -107,6 +128,19 @@ export default function ProfileScreen() {
   const [activityLoading, setActivityLoading] = useState(true);
   const [activityError, setActivityError] = useState<string | null>(null);
 
+  // Friends state (Story #31)
+  const [friendsCount, setFriendsCount] = useState<number>(0);
+  const [pendingRequestsCount, setPendingRequestsCount] = useState<number>(0);
+  const [isFriendsModalVisible, setIsFriendsModalVisible] = useState<boolean>(false);
+  const [friendsActiveTab, setFriendsActiveTab] = useState<FriendsTab>('friends');
+  const [acceptedFriends, setAcceptedFriends] = useState<FriendshipEntry[]>([]);
+  const [incomingRequests, setIncomingRequests] = useState<FriendshipEntry[]>([]);
+  const [friendsModalLoading, setFriendsModalLoading] = useState<boolean>(false);
+  const [searchUsername, setSearchUsername] = useState<string>('');
+  const [searchResults, setSearchResults] = useState<FriendProfile[]>([]);
+  const [isSearching, setIsSearching] = useState<boolean>(false);
+  const [friendsFeedback, setFriendsFeedback] = useState<{ message: string; isError: boolean } | null>(null);
+
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
 
@@ -118,7 +152,7 @@ export default function ProfileScreen() {
 
   const loadAllData = async () => {
     try {
-      await Promise.all([fetchProfile(), fetchActivityFeed()]);
+      await Promise.all([fetchProfile(), fetchActivityFeed(), fetchFriendsSummary()]);
     } finally {
       setLoading(false);
     }
@@ -126,7 +160,7 @@ export default function ProfileScreen() {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await Promise.all([fetchProfile(), fetchActivityFeed()]);
+    await Promise.all([fetchProfile(), fetchActivityFeed(), fetchFriendsSummary()]);
     setRefreshing(false);
   };
 
@@ -165,13 +199,252 @@ export default function ProfileScreen() {
     }
   };
 
+  const fetchFriendsSummary = async () => {
+    if (!user?.id) return;
+    try {
+      const [acceptedRes, pendingRes] = await Promise.all([
+        supabase
+          .from('friendships')
+          .select('id', { count: 'exact', head: true })
+          .eq('status', 'accepted')
+          .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`),
+        supabase
+          .from('friendships')
+          .select('id', { count: 'exact', head: true })
+          .eq('status', 'pending')
+          .eq('receiver_id', user.id),
+      ]);
+
+      if (acceptedRes.error && acceptedRes.error.code !== '42P01') {
+        console.error('Accepted count error:', acceptedRes.error.message);
+      } else {
+        setFriendsCount(acceptedRes.count ?? 0);
+      }
+
+      if (pendingRes.error && pendingRes.error.code !== '42P01') {
+        console.error('Pending count error:', pendingRes.error.message);
+      } else {
+        setPendingRequestsCount(pendingRes.count ?? 0);
+      }
+    } catch (err: any) {
+      console.warn('Friends summary fetch error:', err.message);
+    }
+  };
+
+  const loadFriendsModalData = async () => {
+    if (!user?.id) return;
+    try {
+      setFriendsModalLoading(true);
+      setFriendsFeedback(null);
+
+      const { data: friendships, error } = await supabase
+        .from('friendships')
+        .select('*')
+        .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`);
+
+      if (error) {
+        if (error.code === '42P01') {
+          setFriendsFeedback({
+            message: 'Please create the friendships table in Supabase first.',
+            isError: true,
+          });
+          return;
+        }
+        throw error;
+      }
+
+      const otherUserIds = Array.from(
+        new Set(
+          (friendships || []).map((f: any) =>
+            f.sender_id === user.id ? f.receiver_id : f.sender_id
+          )
+        )
+      );
+
+      let profilesMap: Record<string, FriendProfile> = {};
+      if (otherUserIds.length > 0) {
+        const { data: profiles, error: profError } = await supabase
+          .from('profiles')
+          .select('user_id, username, full_name, major, avatar_url')
+          .in('user_id', otherUserIds);
+
+        if (!profError && profiles) {
+          profiles.forEach((p: any) => {
+            profilesMap[p.user_id] = p;
+          });
+        }
+      }
+
+      const acceptedList: FriendshipEntry[] = [];
+      const pendingList: FriendshipEntry[] = [];
+
+      (friendships || []).forEach((f: any) => {
+        const otherId = f.sender_id === user.id ? f.receiver_id : f.sender_id;
+        const friendProfile: FriendProfile = profilesMap[otherId] || {
+          user_id: otherId,
+          username: 'boilermaker',
+          full_name: 'StudySpot Student',
+          major: null,
+          avatar_url: null,
+        };
+
+        const entry: FriendshipEntry = {
+          friendship_id: f.id,
+          status: f.status,
+          sender_id: f.sender_id,
+          receiver_id: f.receiver_id,
+          created_at: f.created_at,
+          friend: friendProfile,
+        };
+
+        if (f.status === 'accepted') {
+          acceptedList.push(entry);
+        } else if (f.status === 'pending' && f.receiver_id === user.id) {
+          pendingList.push(entry);
+        }
+      });
+
+      setAcceptedFriends(acceptedList);
+      setIncomingRequests(pendingList);
+      setFriendsCount(acceptedList.length);
+      setPendingRequestsCount(pendingList.length);
+    } catch (err: any) {
+      setFriendsFeedback({ message: err.message || 'Error loading friends list.', isError: true });
+    } finally {
+      setFriendsModalLoading(false);
+    }
+  };
+
+  const handleOpenFriendsModal = () => {
+    setIsFriendsModalVisible(true);
+    loadFriendsModalData();
+  };
+
+  const handleAcceptRequest = async (friendshipId: string) => {
+    try {
+      const { error } = await supabase
+        .from('friendships')
+        .update({ status: 'accepted', updated_at: new Date().toISOString() })
+        .eq('id', friendshipId);
+
+      if (error) throw error;
+      setFriendsFeedback({ message: 'Friend request accepted!', isError: false });
+      await loadFriendsModalData();
+    } catch (err: any) {
+      setFriendsFeedback({ message: err.message || 'Failed to accept request.', isError: true });
+    }
+  };
+
+  const handleDeclineRequest = async (friendshipId: string) => {
+    try {
+      const { error } = await supabase.from('friendships').delete().eq('id', friendshipId);
+      if (error) throw error;
+      setFriendsFeedback({ message: 'Request declined.', isError: false });
+      await loadFriendsModalData();
+    } catch (err: any) {
+      setFriendsFeedback({ message: err.message || 'Failed to decline request.', isError: true });
+    }
+  };
+
+  const handleRemoveFriend = async (friendshipId: string, friendName: string) => {
+    Alert.alert(
+      'Remove Friend',
+      `Are you sure you want to remove ${friendName} from your friends?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const { error } = await supabase.from('friendships').delete().eq('id', friendshipId);
+              if (error) throw error;
+              setFriendsFeedback({ message: 'Friend removed.', isError: false });
+              await loadFriendsModalData();
+            } catch (err: any) {
+              setFriendsFeedback({ message: err.message || 'Could not remove friend.', isError: true });
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleSearchUsers = async () => {
+    const query = searchUsername.trim().replace(/^@/, '');
+    if (!query) return;
+
+    try {
+      setIsSearching(true);
+      setFriendsFeedback(null);
+
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('user_id, username, full_name, major, avatar_url')
+        .ilike('username', `%${query}%`)
+        .neq('user_id', user?.id)
+        .limit(10);
+
+      if (error) throw error;
+      setSearchResults(data || []);
+      if ((data || []).length === 0) {
+        setFriendsFeedback({ message: 'No Boilermakers found matching that username.', isError: false });
+      }
+    } catch (err: any) {
+      setFriendsFeedback({ message: err.message || 'Error searching users.', isError: true });
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const handleSendFriendRequest = async (targetUserId: string) => {
+    if (!user?.id) return;
+    try {
+      setFriendsFeedback(null);
+
+      const { data: existing, error: checkError } = await supabase
+        .from('friendships')
+        .select('id, status')
+        .or(
+          `and(sender_id.eq.${user.id},receiver_id.eq.${targetUserId}),and(sender_id.eq.${targetUserId},receiver_id.eq.${user.id})`
+        )
+        .maybeSingle();
+
+      if (checkError && checkError.code !== 'PGRST116') throw checkError;
+
+      if (existing) {
+        if (existing.status === 'accepted') {
+          setFriendsFeedback({ message: 'You are already friends with this user.', isError: true });
+          return;
+        }
+        if (existing.status === 'pending') {
+          setFriendsFeedback({ message: 'A friend request is already pending with this user.', isError: true });
+          return;
+        }
+      }
+
+      const { error: insertError } = await supabase.from('friendships').insert({
+        sender_id: user.id,
+        receiver_id: targetUserId,
+        status: 'pending',
+      });
+
+      if (insertError) throw insertError;
+
+      setFriendsFeedback({ message: 'Friend request sent successfully!', isError: false });
+      setSearchUsername('');
+      setSearchResults([]);
+    } catch (err: any) {
+      setFriendsFeedback({ message: err.message || 'Failed to send request.', isError: true });
+    }
+  };
+
   const fetchActivityFeed = async () => {
     if (!user?.id) return;
     try {
       setActivityLoading(true);
       setActivityError(null);
 
-      // Query reviews, favorites, and study_locations in parallel
       const [reviewsRes, favsRes, locationsRes] = await Promise.all([
         supabase
           .from('reviews')
@@ -190,7 +463,6 @@ export default function ProfileScreen() {
       if (favsRes.error) throw new Error(favsRes.error.message);
       if (locationsRes.error) throw new Error(locationsRes.error.message);
 
-      // Dynamic map: location ID -> { name, category }
       const locationMap = new Map<string, { name: string; category: string }>();
       (locationsRes.data || []).forEach((loc: any) => {
         locationMap.set(String(loc.id), {
@@ -399,7 +671,7 @@ export default function ProfileScreen() {
       <View style={styles.topHeaderCard}>
         <View>
           <Text style={styles.appTitle}>STUDYSPOT PURDUE</Text>
-          <Text style={styles.headerSubtitle}>My Profile</Text>
+          <Text style={styles.headerSubtitle}>Account & My Feed</Text>
         </View>
 
         {!isEditing ? (
@@ -616,6 +888,34 @@ export default function ProfileScreen() {
                 <Text style={styles.bioBodyText}>{bio}</Text>
               </View>
             ) : null}
+
+            {/* Story #31: Friends Stats & Manage Action Bar */}
+            <View style={styles.friendsCardBar}>
+              <View style={styles.friendStats}>
+                <MaterialCommunityIcons name="account-group-outline" size={22} color={COLORS.goldDark} />
+                <View>
+                  <Text style={styles.friendCountText}>
+                    <Text style={styles.friendCountBold}>{friendsCount}</Text> {friendsCount === 1 ? 'Friend' : 'Friends'}
+                  </Text>
+                  {pendingRequestsCount > 0 ? (
+                    <Text style={styles.friendSubText}>{pendingRequestsCount} pending</Text>
+                  ) : null}
+                </View>
+                {pendingRequestsCount > 0 ? (
+                  <View style={styles.pendingAlertBadge}>
+                    <Text style={styles.pendingAlertBadgeText}>{pendingRequestsCount}</Text>
+                  </View>
+                ) : null}
+              </View>
+
+              <Pressable
+                style={({ pressed }) => [styles.manageFriendsBtn, pressed && styles.pressed]}
+                onPress={handleOpenFriendsModal}
+              >
+                <MaterialCommunityIcons name="account-cog-outline" size={16} color={COLORS.header} />
+                <Text style={styles.manageFriendsBtnText}>Manage Friends</Text>
+              </Pressable>
+            </View>
           </View>
         )}
       </View>
@@ -807,6 +1107,279 @@ export default function ProfileScreen() {
         <MaterialCommunityIcons name="logout-variant" size={18} color={COLORS.delete} />
         <Text style={styles.logoutBtnText}>Log Out of Boilermaker Account</Text>
       </Pressable>
+
+      {/* Story #31: Slide-Up Manage Friends Modal */}
+      <Modal
+        visible={isFriendsModalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setIsFriendsModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalSheet, { paddingBottom: Math.max(insets.bottom + 16, 28) }]}>
+            {/* Modal Handle & Header */}
+            <View style={styles.modalHandle} />
+            <View style={styles.modalHeaderRow}>
+              <View>
+                <Text style={styles.modalSubheading}>BOILERMAKER CONNECTIONS</Text>
+                <Text style={styles.modalTitle}>Manage Friends</Text>
+              </View>
+              <Pressable
+                style={({ pressed }) => [styles.modalCloseBtn, pressed && styles.pressed]}
+                onPress={() => setIsFriendsModalVisible(false)}
+              >
+                <MaterialCommunityIcons name="close" size={20} color={COLORS.header} />
+              </Pressable>
+            </View>
+
+            {/* Modal Sub-Tabs */}
+            <View style={styles.modalTabsRow}>
+              <Pressable
+                style={[styles.modalTab, friendsActiveTab === 'friends' && styles.modalTabActive]}
+                onPress={() => {
+                  setFriendsActiveTab('friends');
+                  setFriendsFeedback(null);
+                }}
+              >
+                <Text style={[styles.modalTabText, friendsActiveTab === 'friends' && styles.modalTabTextActive]}>
+                  Friends ({friendsCount})
+                </Text>
+              </Pressable>
+
+              <Pressable
+                style={[styles.modalTab, friendsActiveTab === 'requests' && styles.modalTabActive]}
+                onPress={() => {
+                  setFriendsActiveTab('requests');
+                  setFriendsFeedback(null);
+                }}
+              >
+                <Text style={[styles.modalTabText, friendsActiveTab === 'requests' && styles.modalTabTextActive]}>
+                  Requests {pendingRequestsCount > 0 ? `(${pendingRequestsCount})` : ''}
+                </Text>
+              </Pressable>
+
+              <Pressable
+                style={[styles.modalTab, friendsActiveTab === 'add' && styles.modalTabActive]}
+                onPress={() => {
+                  setFriendsActiveTab('add');
+                  setFriendsFeedback(null);
+                }}
+              >
+                <MaterialCommunityIcons
+                  name="account-plus-outline"
+                  size={15}
+                  color={friendsActiveTab === 'add' ? COLORS.header : COLORS.muted}
+                />
+                <Text style={[styles.modalTabText, friendsActiveTab === 'add' && styles.modalTabTextActive]}>
+                  Add Friend
+                </Text>
+              </Pressable>
+            </View>
+
+            {/* Feedback Message Banner */}
+            {friendsFeedback ? (
+              <View
+                style={[
+                  styles.modalFeedbackBanner,
+                  friendsFeedback.isError ? styles.feedbackError : styles.feedbackSuccess,
+                ]}
+              >
+                <MaterialCommunityIcons
+                  name={friendsFeedback.isError ? 'alert-circle-outline' : 'check-circle-outline'}
+                  size={16}
+                  color={friendsFeedback.isError ? COLORS.delete : COLORS.success}
+                />
+                <Text
+                  style={[
+                    styles.modalFeedbackText,
+                    { color: friendsFeedback.isError ? COLORS.delete : COLORS.success },
+                  ]}
+                >
+                  {friendsFeedback.message}
+                </Text>
+              </View>
+            ) : null}
+
+            {/* Tab 1: Accepted Friends List */}
+            {friendsActiveTab === 'friends' ? (
+              friendsModalLoading ? (
+                <View style={styles.modalLoadingBox}>
+                  <ActivityIndicator color={COLORS.gold} size="small" />
+                  <Text style={styles.modalLoadingText}>Loading friends...</Text>
+                </View>
+              ) : acceptedFriends.length === 0 ? (
+                <View style={styles.modalEmptyBox}>
+                  <MaterialCommunityIcons name="account-group-outline" size={40} color={COLORS.icon} />
+                  <Text style={styles.modalEmptyTitle}>No friends added yet</Text>
+                  <Text style={styles.modalEmptySubtitle}>
+                    Study Spot is better with friends! Switch to the Add Friend tab to search for fellow Boilermakers.
+                  </Text>
+                </View>
+              ) : (
+                <ScrollView style={styles.modalListScroll} showsVerticalScrollIndicator={false}>
+                  {acceptedFriends.map((f) => (
+                    <View key={f.friendship_id} style={styles.userRowCard}>
+                      <View style={styles.userRowAvatarBox}>
+                        {f.friend.avatar_url ? (
+                          <Image source={{ uri: f.friend.avatar_url }} style={styles.userRowAvatar} />
+                        ) : (
+                          <View style={styles.userRowAvatarFallback}>
+                            <Text style={styles.userRowInitial}>
+                              {(f.friend.full_name || f.friend.username || 'B').charAt(0).toUpperCase()}
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+
+                      <View style={styles.userRowInfo}>
+                        <Text style={styles.userRowName}>{f.friend.full_name || f.friend.username}</Text>
+                        <Text style={styles.userRowUsername}>{'@' + f.friend.username}</Text>
+                        {f.friend.major ? <Text style={styles.userRowMajor}>{f.friend.major}</Text> : null}
+                      </View>
+
+                      <Pressable
+                        style={({ pressed }) => [styles.userActionDangerBtn, pressed && styles.pressed]}
+                        onPress={() =>
+                          handleRemoveFriend(f.friendship_id, f.friend.full_name || f.friend.username)
+                        }
+                      >
+                        <MaterialCommunityIcons name="account-remove-outline" size={16} color={COLORS.delete} />
+                        <Text style={styles.userActionDangerText}>Remove</Text>
+                      </Pressable>
+                    </View>
+                  ))}
+                </ScrollView>
+              )
+            ) : null}
+
+            {/* Tab 2: Incoming Requests */}
+            {friendsActiveTab === 'requests' ? (
+              friendsModalLoading ? (
+                <View style={styles.modalLoadingBox}>
+                  <ActivityIndicator color={COLORS.gold} size="small" />
+                  <Text style={styles.modalLoadingText}>Checking requests...</Text>
+                </View>
+              ) : incomingRequests.length === 0 ? (
+                <View style={styles.modalEmptyBox}>
+                  <MaterialCommunityIcons name="email-check-outline" size={40} color={COLORS.icon} />
+                  <Text style={styles.modalEmptyTitle}>No pending requests</Text>
+                  <Text style={styles.modalEmptySubtitle}>
+                    You're all caught up! New Boilermaker friend requests will appear here.
+                  </Text>
+                </View>
+              ) : (
+                <ScrollView style={styles.modalListScroll} showsVerticalScrollIndicator={false}>
+                  {incomingRequests.map((req) => (
+                    <View key={req.friendship_id} style={styles.userRowCard}>
+                      <View style={styles.userRowAvatarBox}>
+                        {req.friend.avatar_url ? (
+                          <Image source={{ uri: req.friend.avatar_url }} style={styles.userRowAvatar} />
+                        ) : (
+                          <View style={styles.userRowAvatarFallback}>
+                            <Text style={styles.userRowInitial}>
+                              {(req.friend.full_name || req.friend.username || 'B').charAt(0).toUpperCase()}
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+
+                      <View style={styles.userRowInfo}>
+                        <Text style={styles.userRowName}>{req.friend.full_name || req.friend.username}</Text>
+                        <Text style={styles.userRowUsername}>{'@' + req.friend.username}</Text>
+                        {req.friend.major ? <Text style={styles.userRowMajor}>{req.friend.major}</Text> : null}
+                      </View>
+
+                      <View style={styles.actionPillsCol}>
+                        <Pressable
+                          style={({ pressed }) => [styles.acceptBtn, pressed && styles.pressed]}
+                          onPress={() => handleAcceptRequest(req.friendship_id)}
+                        >
+                          <MaterialCommunityIcons name="check" size={14} color={COLORS.white} />
+                          <Text style={styles.acceptBtnText}>Accept</Text>
+                        </Pressable>
+
+                        <Pressable
+                          style={({ pressed }) => [styles.declineBtn, pressed && styles.pressed]}
+                          onPress={() => handleDeclineRequest(req.friendship_id)}
+                        >
+                          <MaterialCommunityIcons name="close" size={14} color={COLORS.delete} />
+                          <Text style={styles.declineBtnText}>Decline</Text>
+                        </Pressable>
+                      </View>
+                    </View>
+                  ))}
+                </ScrollView>
+              )
+            ) : null}
+
+            {/* Tab 3: Search & Add Friend */}
+            {friendsActiveTab === 'add' ? (
+              <View style={styles.addTabContainer}>
+                <View style={styles.searchBarRow}>
+                  <MaterialCommunityIcons name="magnify" size={20} color={COLORS.muted} />
+                  <TextInput
+                    style={styles.searchInput}
+                    placeholder="Search Boilermaker username..."
+                    placeholderTextColor={COLORS.muted}
+                    value={searchUsername}
+                    onChangeText={setSearchUsername}
+                    autoCapitalize="none"
+                    returnKeyType="search"
+                    onSubmitEditing={handleSearchUsers}
+                  />
+                  {searchUsername.length > 0 ? (
+                    <Pressable
+                      style={({ pressed }) => [styles.searchActionBtn, pressed && styles.pressed]}
+                      onPress={handleSearchUsers}
+                    >
+                      <Text style={styles.searchActionBtnText}>Search</Text>
+                    </Pressable>
+                  ) : null}
+                </View>
+
+                {isSearching ? (
+                  <View style={styles.modalLoadingBox}>
+                    <ActivityIndicator color={COLORS.gold} size="small" />
+                    <Text style={styles.modalLoadingText}>Searching campus directory...</Text>
+                  </View>
+                ) : (
+                  <ScrollView style={styles.modalListScroll} showsVerticalScrollIndicator={false}>
+                    {searchResults.map((target) => (
+                      <View key={target.user_id} style={styles.userRowCard}>
+                        <View style={styles.userRowAvatarBox}>
+                          {target.avatar_url ? (
+                            <Image source={{ uri: target.avatar_url }} style={styles.userRowAvatar} />
+                          ) : (
+                            <View style={styles.userRowAvatarFallback}>
+                              <Text style={styles.userRowInitial}>
+                                {(target.full_name || target.username || 'B').charAt(0).toUpperCase()}
+                              </Text>
+                            </View>
+                          )}
+                        </View>
+
+                        <View style={styles.userRowInfo}>
+                          <Text style={styles.userRowName}>{target.full_name || target.username}</Text>
+                          <Text style={styles.userRowUsername}>{'@' + target.username}</Text>
+                          {target.major ? <Text style={styles.userRowMajor}>{target.major}</Text> : null}
+                        </View>
+
+                        <Pressable
+                          style={({ pressed }) => [styles.sendRequestBtn, pressed && styles.pressed]}
+                          onPress={() => handleSendFriendRequest(target.user_id)}
+                        >
+                          <MaterialCommunityIcons name="account-plus" size={14} color={COLORS.white} />
+                          <Text style={styles.sendRequestBtnText}>Add</Text>
+                        </Pressable>
+                      </View>
+                    ))}
+                  </ScrollView>
+                )}
+              </View>
+            ) : null}
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
@@ -1036,6 +1609,7 @@ const styles = StyleSheet.create({
     borderColor: COLORS.divider,
     borderRadius: 14,
     padding: 14,
+    marginBottom: 14,
   },
   bioHeadingRow: {
     flexDirection: 'row',
@@ -1054,6 +1628,71 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     lineHeight: 20,
   },
+  /* Friends Bar in Profile */
+  friendsCardBar: {
+    width: '100%',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: COLORS.cardSoft,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    marginTop: 6,
+  },
+  friendStats: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  friendCountText: {
+    fontSize: 14,
+    color: COLORS.text,
+    fontWeight: '600',
+  },
+  friendCountBold: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: COLORS.header,
+  },
+  friendSubText: {
+    fontSize: 11,
+    color: COLORS.goldDark,
+    fontWeight: '700',
+  },
+  pendingAlertBadge: {
+    backgroundColor: COLORS.goldDark,
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 5,
+  },
+  pendingAlertBadgeText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: COLORS.white,
+  },
+  manageFriendsBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: COLORS.goldSoft,
+    borderWidth: 1,
+    borderColor: COLORS.gold,
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+    borderRadius: 14,
+  },
+  manageFriendsBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.header,
+  },
+  /* Form Editing Styles */
   formContainer: {
     width: '100%',
   },
@@ -1390,5 +2029,291 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
     color: COLORS.delete,
+  },
+
+  /* Story #31: Slide-Up Friends Modal Styles */
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(33, 26, 21, 0.55)',
+    justifyContent: 'flex-end',
+  },
+  modalSheet: {
+    backgroundColor: COLORS.card,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    borderTopWidth: 1,
+    borderLeftWidth: 1,
+    borderRightWidth: 1,
+    borderColor: COLORS.border,
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    maxHeight: '85%',
+  },
+  modalHandle: {
+    width: 44,
+    height: 5,
+    backgroundColor: COLORS.border,
+    borderRadius: 3,
+    alignSelf: 'center',
+    marginBottom: 16,
+  },
+  modalHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 16,
+  },
+  modalSubheading: {
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 1.2,
+    color: COLORS.goldDark,
+  },
+  modalTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: COLORS.header,
+  },
+  modalCloseBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: COLORS.cardSoft,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalTabsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 14,
+  },
+  modalTab: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    paddingVertical: 9,
+    borderRadius: 12,
+    backgroundColor: COLORS.cardSoft,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  modalTabActive: {
+    backgroundColor: COLORS.goldSoft,
+    borderColor: COLORS.goldDark,
+  },
+  modalTabText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.muted,
+  },
+  modalTabTextActive: {
+    color: COLORS.header,
+    fontWeight: '800',
+  },
+  modalFeedbackBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    marginBottom: 12,
+    borderWidth: 1,
+  },
+  feedbackSuccess: {
+    backgroundColor: COLORS.successBackground,
+    borderColor: COLORS.success,
+  },
+  feedbackError: {
+    backgroundColor: COLORS.deleteBackground,
+    borderColor: COLORS.delete,
+  },
+  modalFeedbackText: {
+    fontSize: 12,
+    fontWeight: '700',
+    flex: 1,
+  },
+  modalLoadingBox: {
+    paddingVertical: 40,
+    alignItems: 'center',
+    gap: 8,
+  },
+  modalLoadingText: {
+    fontSize: 13,
+    color: COLORS.muted,
+    fontWeight: '600',
+  },
+  modalEmptyBox: {
+    paddingVertical: 36,
+    alignItems: 'center',
+    gap: 6,
+  },
+  modalEmptyTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: COLORS.header,
+    marginTop: 6,
+  },
+  modalEmptySubtitle: {
+    fontSize: 13,
+    color: COLORS.muted,
+    textAlign: 'center',
+    lineHeight: 18,
+    maxWidth: 280,
+  },
+  modalListScroll: {
+    maxHeight: 380,
+  },
+  userRowCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.cardSoft,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    padding: 12,
+    borderRadius: 14,
+    marginBottom: 10,
+    gap: 12,
+  },
+  userRowAvatarBox: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    borderWidth: 1.5,
+    borderColor: COLORS.gold,
+    overflow: 'hidden',
+    backgroundColor: COLORS.white,
+  },
+  userRowAvatar: {
+    width: '100%',
+    height: '100%',
+  },
+  userRowAvatarFallback: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: COLORS.goldSoft,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  userRowInitial: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: COLORS.goldDark,
+  },
+  userRowInfo: {
+    flex: 1,
+  },
+  userRowName: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: COLORS.text,
+  },
+  userRowUsername: {
+    fontSize: 12,
+    color: COLORS.goldDark,
+    fontWeight: '700',
+  },
+  userRowMajor: {
+    fontSize: 11,
+    color: COLORS.muted,
+    marginTop: 2,
+  },
+  userActionDangerBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    backgroundColor: COLORS.deleteBackground,
+    borderWidth: 1,
+    borderColor: COLORS.delete,
+    borderRadius: 10,
+  },
+  userActionDangerText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: COLORS.delete,
+  },
+  actionPillsCol: {
+    gap: 6,
+  },
+  acceptBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: COLORS.gold,
+    paddingVertical: 5,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+  },
+  acceptBtnText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: COLORS.white,
+  },
+  declineBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: COLORS.deleteBackground,
+    borderWidth: 1,
+    borderColor: COLORS.delete,
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+  },
+  declineBtnText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: COLORS.delete,
+  },
+  addTabContainer: {
+    width: '100%',
+  },
+  searchBarRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: COLORS.cardSoft,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginBottom: 12,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 14,
+    color: COLORS.text,
+  },
+  searchActionBtn: {
+    backgroundColor: COLORS.gold,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+  },
+  searchActionBtnText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: COLORS.white,
+  },
+  sendRequestBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: COLORS.gold,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+  },
+  sendRequestBtnText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: COLORS.white,
   },
 });
