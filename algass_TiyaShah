@@ -2468,3 +2468,69 @@ const fetchActivityFeed = async () => {
     setActivityLoading(false);
   }
 };
+
+Prompt: ok now in the profile i want to add a new thing for friend requests: #31 As a user, I would like to send, accept, decline, and remove friend requests.
+Response: To implement Story #31 cleanly without cluttering your existing profile layout:
+
+A Friends Stat Badge & "Manage Friends" Button right below your user info:
+
+Displays the current friend count.
+
+Displays an incoming request alert badge if there are pending requests.
+
+A "Manage Friends" action button.
+
+A Manage Friends Modal:
+
+Tabs for Friends, Requests, and Add Friend.
+
+Step 1: Create the friendships table in Supabase SQL Editor:
+
+SQL
+create table if not exists public.friendships (
+  id uuid primary key default gen_random_uuid(),
+  sender_id uuid not null references public.profiles(user_id) on delete cascade,
+  receiver_id uuid not null references public.profiles(user_id) on delete cascade,
+  status text not null check (status in ('pending', 'accepted', 'declined')),
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  updated_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  unique (sender_id, receiver_id)
+);
+
+alter table public.friendships enable row level security;
+
+create policy "Users can view their own friendships"
+  on public.friendships for select
+  using (auth.uid() = sender_id or auth.uid() = receiver_id);
+
+create policy "Users can insert friendship requests"
+  on public.friendships for insert
+  with check (auth.uid() = sender_id);
+
+create policy "Users can update their friendships"
+  on public.friendships for update
+  using (auth.uid() = receiver_id or auth.uid() = sender_id);
+
+create policy "Users can delete their friendships"
+  on public.friendships for delete
+  using (auth.uid() = sender_id or auth.uid() = receiver_id);
+Step 2: Add this UI component structure in profile.tsx:
+
+TypeScript
+<View style={styles.friendsCardBar}>
+  <View style={styles.friendStats}>
+    <Ionicons name="people-outline" size={20} color="#CEB888" />
+    <Text style={styles.friendCountText}>
+      <Text style={styles.friendCountBold}>{friendsCount}</Text> {friendsCount === 1 ? 'Friend' : 'Friends'}
+    </Text>
+    {pendingCount > 0 && (
+      <View style={styles.pendingBadge}>
+        <Text style={styles.pendingBadgeText}>{pendingCount} new</Text>
+      </View>
+    )}
+  </View>
+
+  <Pressable style={styles.manageFriendsBtn} onPress={() => setFriendsModalVisible(true)}>
+    <Text style={styles.manageFriendsBtnText}>Manage Friends</Text>
+  </Pressable>
+</View>
