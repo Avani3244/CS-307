@@ -2325,3 +2325,146 @@ Corrupt the Cached Storage:
 In your browser dev tools (or mobile debugger), go to Application → Local Storage, find the key prefixed with sb-<project-ref>-auth-token, and either delete it or alter the refresh_token string to invalid gibberish before reloading the app.
 
 Would you like to review your root _layout.tsx to verify that the route guard catches this session === null condition and cleanly renders the login screen?
+
+Prompt: what is the default for supabase
+Response: Supabase Auth uses the following default values:
+
+Access Token (JWT) Expiration: 3,600 seconds (1 hour). Every request sent with this token is valid for 1 hour from issuance.
+
+Auto Refresh Lead Time: The Supabase client library automatically triggers a background refresh 60 seconds before the 1-hour access token expires.
+
+Overall Session & Refresh Token Lifetime: Indefinite (no time limit) on the default/free tier. A user will remain signed in indefinitely as long as their client continues to auto-refresh and they do not manually log out.
+
+Refresh Token Reuse Interval: 10 seconds. If multiple simultaneous requests try to use the same refresh token within a 10-second window, Supabase permits it rather than instantly revoking the session.
+
+Where to View or Adjust This:
+In your Supabase Dashboard:
+
+Go to Authentication → Configuration (or Settings → Auth).
+
+Look under Sessions or JWT Expiry.
+
+You will see JWT expiry limit set to 3600 seconds.
+
+Prompt: how do i change and check this 
+Response: Part 1: How to Check the Access Token JWT Expiration
+You can inspect the exact expiration timestamp of your active session right now using your browser or terminal.
+
+Option A: In Your Browser (Fastest on localhost:8081)
+
+Open your app running in the browser (npx expo start -c --web).
+
+Press F12 and go to the Application tab (or Storage tab in Firefox).
+
+Expand Local Storage in the left sidebar and select http://localhost:8081.
+
+Look for the key named like sb-<your-project-id>-auth-token.
+
+Click on it. Inside the value field, you will see a JSON string containing access_token and expires_at.
+
+To see the human-readable expiration, copy the long string under access_token, paste it into jwt.io, and look at the decoded payload on the right under the exp field.
+
+Option B: From Your React Native Code
+You can log it directly from your AuthContext or any component:
+
+TypeScript
+import { supabase } from '@/lib/supabase';
+
+const checkExpiry = async () => {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (session) {
+    console.log('Access token expires at:', new Date(session.expires_at! * 1000).toLocaleString());
+    console.log('Seconds until expiry:', session.expires_in);
+  }
+};
+Part 2: How to Change the Expiration Time
+The expiration length is configured centrally in the Supabase Dashboard:
+
+Log into your Supabase Dashboard.
+
+Select your StudySpot project.
+
+In the left navigation menu, click Authentication → Configuration (or Settings → Auth).
+
+Locate the Sessions section and look for JWT expiry limit (in seconds).
+
+Change 3600 to a smaller value like 60 (1 minute) or 300 (5 minutes) for quick testing, then click Save.
+
+Prompt: In my profile.tsx, the activity feed is showing raw IDs like Location #cc29d5c8-da93-4d8e-922c-3dfac8a40339 instead of real names. How do I look up the proper names?
+Response: The feed displays raw hashes because the database stores location foreign keys as UUIDs (e.g., cc29d5c8...), and your initial helper only had placeholder mapping for simple numeric IDs. Because the UUID was not found in the dictionary, it fell back to printing Location #${strId}.   Check whether your team defines a list of locations in a constants file or queries them dynamically from the database.Prompt: Here is what src/app/review/[locationId].tsx looks like:TypeScriptconst shortLocationId = locationId === 'Unknown location' ? 'No location selected' : `${locationId.slice(0, 8)}…`;
+<View style={styles.locationInfo}>
+  <Text style={styles.locationTitle}>Selected Study Location</Text>
+  <Text numberOfLines={1} style={styles.locationSubtitle}>{shortLocationId}</Text>
+</View>
+
+Prompt: Here is what src/app/review/[locationId].tsx looks like:
+const shortLocationId = locationId === 'Unknown location' ? 'No location selected' : `${locationId.slice(0, 8)}…`;
+<View style={styles.locationInfo}>
+  <Text style={styles.locationTitle}>Selected Study Location</Text>
+  <Text numberOfLines={1} style={styles.locationSubtitle}>{shortLocationId}</Text>
+</View>
+
+Response: No, locationId.tsx also does not have a static dictionary—it simply truncates the route parameter with ${locationId.slice(0, 8)}….
+
+The real spot names aren't hardcoded in that file; they are loaded dynamically from your database tables.
+
+Prompt: I don't want to hardcode the names of the places. Is there any other way?
+
+Response: Yes, you can dynamically fetch the locations directly from Supabase instead of maintaining a hardcoded dictionary.   Query whichever database table holds your campus locations (such as study_locations), then build an in-memory Map keyed by id at runtime to match IDs to names automatically.
+
+Prompt: There is a table called study_locations with columns id, name, category, and building. How do I fetch from that dynamically in my profile feed?
+
+Response: Run a parallel query inside fetchActivityFeed using Promise.all across reviews, favorites, and study_locations:
+
+TypeScript
+const fetchActivityFeed = async () => {
+  if (!user?.id) return;
+  try {
+    setActivityLoading(true);
+    const [reviewsRes, favsRes, locationsRes] = await Promise.all([
+      supabase.from('reviews').select('id, overall_rating, review_text, created_at, location_id').eq('user_id', user.id),
+      supabase.from('favorites').select('user_id, location_id, created_at').eq('user_id', user.id),
+      supabase.from('study_locations').select('id, name, category, building'),
+    ]);
+
+    if (reviewsRes.error) throw reviewsRes.error;
+    if (favsRes.error) throw favsRes.error;
+    if (locationsRes.error) throw locationsRes.error;
+
+    const locationMap = new Map<string, { name: string; category: string }>();
+    (locationsRes.data || []).forEach((loc: any) => {
+      locationMap.set(String(loc.id), {
+        name: loc.name || 'Campus Location',
+        category: loc.category || 'Study Spot',
+      });
+    });
+
+    const reviewEntries = (reviewsRes.data || []).map((r: any) => ({
+      id: `rev-${r.id}`,
+      type: 'review',
+      created_at: r.created_at,
+      location_id: String(r.location_id),
+      location_name: locationMap.get(String(r.location_id))?.name || 'Purdue Study Spot',
+      location_category: locationMap.get(String(r.location_id))?.category || 'Study Spot',
+      rating: r.overall_rating,
+      comment: r.review_text,
+    }));
+
+    const favoriteEntries = (favsRes.data || []).map((f: any) => ({
+      id: `fav-${f.user_id}-${f.location_id}`,
+      type: 'favorite',
+      created_at: f.created_at,
+      location_id: String(f.location_id),
+      location_name: locationMap.get(String(f.location_id))?.name || 'Purdue Study Spot',
+      location_category: locationMap.get(String(f.location_id))?.category || 'Study Spot',
+    }));
+
+    setFeedItems([...reviewEntries, ...favoriteEntries].sort(
+      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    ));
+  } catch (err: any) {
+    setActivityError(err.message);
+  } finally {
+    setActivityLoading(false);
+  }
+};
